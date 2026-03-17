@@ -64,21 +64,26 @@
                     return;
                 }
 
-                list.innerHTML = entries.map(entry => `
-                    <div class="scroll_node crp-entry" onmousedown="window.location.assign('${entry.url}');">
-                        <div class="crp-entry--image">
-                            <img src="${entry.recipient.avatar}" alt="Фотография пользователя" loading="lazy" />
-                        </div>
-                        <div class="crp-entry--info">
-                            <a href="${entry.recipient.url}">${escapeHtml(entry.recipient.name)}</a><br/>
-                            <span>${escapeHtml(entry.lastMessage.time)}</span>
-                        </div>
-                        <div class="crp-entry--message ${entry.lastMessage.unread ? 'unread' : ''}">
-                            ${entry.lastMessage.senderOwn ? `<div class="crp-entry--message---av"><img src="${entry.lastMessage.senderAvatar}" alt="Фотография пользователя" /></div>` : ``}
-                            <div class="crp-entry--message---text">${entry.lastMessage.text}</div>
-                        </div>
-                    </div>
-                `).join("");
+                list.innerHTML = entries.map(entry => {
+                    const ownAvatar = entry.lastMessage.senderOwn
+                        ? '<div class="crp-entry--message---av"><img src="' + entry.lastMessage.senderAvatar + '" alt="Фотография пользователя" /></div>'
+                        : '';
+
+                    return ''
+                        + '<div class="scroll_node crp-entry" onmousedown="window.location.assign(\'' + entry.url + '\');">'
+                        + '  <div class="crp-entry--image">'
+                        + '    <img src="' + entry.recipient.avatar + '" alt="Фотография пользователя" loading="lazy" />'
+                        + '  </div>'
+                        + '  <div class="crp-entry--info">'
+                        + '    <a href="' + entry.recipient.url + '">' + escapeHtml(entry.recipient.name) + '</a><br/>'
+                        + '    <span>' + escapeHtml(entry.lastMessage.time) + '</span>'
+                        + '  </div>'
+                        + '  <div class="crp-entry--message ' + (entry.lastMessage.unread ? 'unread' : '') + '">'
+                        +       ownAvatar
+                        + '    <div class="crp-entry--message---text">' + entry.lastMessage.text + '</div>'
+                        + '  </div>'
+                        + '</div>';
+                }).join("");
             };
 
             const refreshList = async () => {
