@@ -435,7 +435,7 @@
         {script "js/options.js"}
 
         {ifset $thisUser}
-            {script "js/al_notifs.js"}
+            {* Temporarily disable notification long-poll while investigating request stalls. *}
             {script "js/al_feed.js"}
         {/ifset}
 
