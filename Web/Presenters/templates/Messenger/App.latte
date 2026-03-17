@@ -101,49 +101,106 @@
                 this.ko     = ko.applyBindings(new MessengerViewModel(messages));
                 this.appEl  = document.querySelector(".messenger-app--messages");
                 this.offset = 0;
-                
-                this._loadHistory();
-                // this._setupListener();
-                this.appEl.scrollTop = this.appEl.scrollHeight;
+                this.latest = 0;
+                this.loadingHistory = false;
+                this.polling = false;
+
+                this._loadHistory(true);
+                this._setupPolling();
             }
             
-            _loadHistory() {
-                let xhr = new XMLHttpRequest();
-                xhr.open("GET", "/im/api/messages" + {$correspondent->getId()} + `/${ this.offset }.json`, false);
-                xhr.send();
-                
-                let messages    = JSON.parse(xhr.responseText);
-                let lastMessage = messages[messages.length - 1];
-                if(typeof lastMessage !== "undefined") this.offset = lastMessage.uuid;
-                
-                this.prependMessages(messages);
+            async _fetchMessages(offset = 0) {
+                let resp = await fetch("/im/api/messages" + {$correspondent->getId()} + "/" + offset + ".json", {
+                    credentials: "same-origin"
+                });
+                if(!resp.ok) {
+                    throw new Error(`Failed to fetch messages: ${resp.status}`);
+                }
+
+                return await resp.json();
+            }
+
+            _rememberBounds(messages) {
+                if(messages.length < 1) {
+                    return;
+                }
+
+                let ids = messages.map(message => message.uuid);
+                let min = Math.min(...ids);
+                let max = Math.max(...ids);
+
+                if(this.offset === 0 || min < this.offset) {
+                    this.offset = min;
+                }
+
+                if(this.latest === 0 || max > this.latest) {
+                    this.latest = max;
+                }
+            }
+
+            _hasMessage(uuid) {
+                return window.messages().some(message => message.uuid === uuid);
+            }
+
+            async _loadHistory(scroll = false) {
+                if(this.loadingHistory) {
+                    return;
+                }
+
+                this.loadingHistory = true;
+                try {
+                    let messages = await this._fetchMessages(this.offset);
+                    let unseen = messages.filter(message => !this._hasMessage(message.uuid));
+                    let lastMessage = unseen[unseen.length - 1];
+                    if(typeof lastMessage !== "undefined") {
+                        this.offset = lastMessage.uuid;
+                    }
+
+                    this._rememberBounds(unseen);
+                    this.prependMessages(unseen);
+
+                    if(scroll) {
+                        this.appEl.scrollTop = this.appEl.scrollHeight;
+                    }
+                } catch (error) {
+                    console.error("Failed to load message history", error);
+                } finally {
+                    this.loadingHistory = false;
+                }
             }
             
-            _setupListener() {
-                let listenLongpool = () => {
-                    let xhr = new XMLHttpRequest();
-                    xhr.open("GET", "/im12", true);
-                    xhr.onload = () => {
-                        let data = JSON.parse(xhr.responseText);
-                        data.forEach(event => {
-                            event = event.event;
-                            if(event.type !== "newMessage")
-                                return;
-                            else if(event.message.sender.id !== {$correspondent->getId()})
-                                return;
-                            else if(this.offset >= event.message.uuid)
-                                return void(console.warn("Gay message recieved, skipping. [-WHeterosexual]"));
-                            
-                            this.addMessage(event.message);
-                            this.offset = event.message.uuid;
-                        });
-                        
-                        listenLongpool();
-                    };
-                    xhr.send();
-                };
-                
-                listenLongpool();
+            _setupPolling() {
+                window.setInterval(() => this._pollLatest(), 3000);
+            }
+
+            async _pollLatest() {
+                if(this.polling) {
+                    return;
+                }
+
+                this.polling = true;
+                try {
+                    let messages = await this._fetchMessages(0);
+                    let unseen = messages
+                        .filter(message => !this._hasMessage(message.uuid))
+                        .sort((a, b) => a.uuid - b.uuid);
+
+                    if(unseen.length < 1) {
+                        return;
+                    }
+
+                    let shouldScroll = this.appEl.scrollHeight - this.appEl.scrollTop - this.appEl.clientHeight < 80;
+                    unseen.forEach(message => this.addMessage(message, false));
+                    this._rememberBounds(unseen);
+
+                    if(shouldScroll) {
+                        this.appEl.scrollTop = this.appEl.scrollHeight;
+                    }
+                } catch (error) {
+                    console.error("Failed to poll new messages", error);
+                } finally {
+                    this.polling = false;
+                }
             }
             
             appendMessages(messages) {
