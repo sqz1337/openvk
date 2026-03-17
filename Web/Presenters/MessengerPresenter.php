@@ -41,6 +41,29 @@ final class MessengerPresenter extends OpenVKPresenter
         }
     }
 
+    private function serializeCorrespondence(Correspondence $correspondence): array
+    {
+        $recipient = $correspondence->getCorrespondents()[1];
+        $lastMsg   = $correspondence->getPreviewMessage();
+        $author    = $lastMsg->getSender();
+
+        return [
+            "url"       => $correspondence->getURL(),
+            "recipient" => [
+                "name"   => $recipient->getCanonicalName(),
+                "url"    => $recipient->getURL(),
+                "avatar" => $recipient->getAvatarURL('miniscule'),
+            ],
+            "lastMessage" => [
+                "text"       => $lastMsg->getText(),
+                "time"       => $lastMsg->getSendTimeHumanized(),
+                "unread"     => (bool) $lastMsg->getUnreadState(),
+                "senderOwn"  => $author->getId() === $this->user->identity->getId(),
+                "senderAvatar" => $author->getAvatarURL('miniscule'),
+            ],
+        ];
+    }
+
     public function renderIndex(): void
     {
         $this->assertUserLoggedIn();
@@ -158,6 +181,17 @@ final class MessengerPresenter extends OpenVKPresenter
 
         header("Content-Type: application/json");
         exit(json_encode($messages));
+    }
+
+    public function renderApiList(int $page = 1): void
+    {
+        $this->assertUserLoggedIn();
+
+        $correspondences = iterator_to_array($this->messages->getCorrespondencies($this->user->identity, $page));
+        $payload = array_map(fn (Correspondence $correspondence): array => $this->serializeCorrespondence($correspondence), $correspondences);
+
+        header("Content-Type: application/json");
+        exit(json_encode($payload));
     }
 
     public function renderApiWriteMessage(int $sel): void

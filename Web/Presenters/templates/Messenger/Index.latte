@@ -17,7 +17,7 @@
     </div>
 
     {if sizeof($corresps) > 0}
-        <div class="crp-list scroll_container">
+        <div class="crp-list scroll_container" id="messenger-index-list">
             <div n:foreach="$corresps as $coresp"
                  class="scroll_node crp-entry"
                  onmousedown="window.location.assign({$coresp->getURL()});" >
@@ -57,13 +57,57 @@
     <script>
         (function setupMessengerIndexRefresh() {
             let lastCount = {$thisUser->getUnreadMessagesCount()};
+            const list = document.getElementById("messenger-index-list");
+
+            const renderEntries = entries => {
+                if(!list || !Array.isArray(entries)) {
+                    return;
+                }
+
+                list.innerHTML = entries.map(entry => `
+                    <div class="scroll_node crp-entry" onmousedown="window.location.assign('${entry.url}');">
+                        <div class="crp-entry--image">
+                            <img src="${entry.recipient.avatar}" alt="Фотография пользователя" loading="lazy" />
+                        </div>
+                        <div class="crp-entry--info">
+                            <a href="${entry.recipient.url}">${escapeHtml(entry.recipient.name)}</a><br/>
+                            <span>${escapeHtml(entry.lastMessage.time)}</span>
+                        </div>
+                        <div class="crp-entry--message ${entry.lastMessage.unread ? 'unread' : ''}">
+                            ${entry.lastMessage.senderOwn ? `<div class="crp-entry--message---av"><img src="${entry.lastMessage.senderAvatar}" alt="Фотография пользователя" /></div>` : ``}
+                            <div class="crp-entry--message---text">${entry.lastMessage.text}</div>
+                        </div>
+                    </div>
+                `).join("");
+            };
+
+            const refreshList = async () => {
+                if(!list) {
+                    return;
+                }
+
+                try {
+                    const resp = await fetch("/im/api/list/1.json?_poll=" + Date.now(), {
+                        credentials: "same-origin",
+                        cache: "no-store"
+                    });
+                    if(!resp.ok) {
+                        throw new Error("Failed to fetch correspondences: " + resp.status);
+                    }
+
+                    renderEntries(await resp.json());
+                } catch (error) {
+                    console.error("Failed to refresh messenger list", error);
+                }
+            };
 
             const pollCounters = async () => {
                 try {
                     const counters = await window.OVKAPI.call("account.getCounters", {});
                     const currentCount = counters.messages ?? 0;
                     if(currentCount !== lastCount) {
-                        window.location.reload();
+                        lastCount = currentCount;
+                        await refreshList();
                         return;
                     }
 
