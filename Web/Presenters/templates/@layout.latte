@@ -452,10 +452,6 @@
                     const fullCounter = document.getElementById("layout-unread-messages");
                     const miniCounter = document.getElementById("layout-unread-messages-mini");
 
-                    if(!fullCounter && !miniCounter) {
-                        return;
-                    }
-
                     const updateCounters = count => {
                         if(fullCounter) {
                             fullCounter.textContent = count;
@@ -483,6 +479,7 @@
                         }
                     };
 
+                    pollCounters();
                     window.setInterval(pollCounters, 5000);
                 })();
             </script>
