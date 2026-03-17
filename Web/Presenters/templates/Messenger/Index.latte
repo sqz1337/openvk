@@ -53,4 +53,27 @@
         <br/>
         <center>{_no_messages}</center>
     {/if}
+
+    <script>
+        (function setupMessengerIndexRefresh() {
+            let lastCount = {$thisUser->getUnreadMessagesCount()};
+
+            const pollCounters = async () => {
+                try {
+                    const counters = await window.OVKAPI.call("account.getCounters", {});
+                    const currentCount = counters.messages ?? 0;
+                    if(currentCount !== lastCount) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    lastCount = currentCount;
+                } catch (error) {
+                    console.error("Failed to refresh messenger index", error);
+                }
+            };
+
+            window.setInterval(pollCounters, 5000);
+        })();
+    </script>
 {/block}
