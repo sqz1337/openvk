@@ -115,6 +115,8 @@ routes:
       handler: "Comment->deleteComment"
     - url: "/notifications"
       handler: "Notification->feed"
+    - url: "/notifications/api/latest.json"
+      handler: "Notification->apiLatest"
     - url: "/feed"
       handler: "Wall->feed"
     - url: "/feed/all"
