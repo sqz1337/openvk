@@ -23,6 +23,13 @@ final class MessengerPresenter extends OpenVKPresenter
         parent::__construct();
     }
 
+    private function releaseSessionLock(): void
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+    }
+
     private function getCorrespondent(int $id): object
     {
         if ($id > 0) {
@@ -79,6 +86,7 @@ final class MessengerPresenter extends OpenVKPresenter
     public function renderEvents(int $randNum): void
     {
         $this->assertUserLoggedIn();
+        $this->releaseSessionLock();
 
         header("Content-Type: application/json");
         $this->signaler->listen(function ($event, $id) {
@@ -120,6 +128,8 @@ final class MessengerPresenter extends OpenVKPresenter
         } elseif ($time == 0) {
             $time = 25;
         } // default
+
+        $this->releaseSessionLock();
 
         $this->signaler->listen(function ($event, $eId) use ($id) {
             exit(json_encode([
