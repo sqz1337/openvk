@@ -52,8 +52,7 @@ final class MessengerPresenter extends OpenVKPresenter
     {
         $lastMsg = $conversation->getLastMessage();
         $author  = is_null($lastMsg) ? null : $lastMsg->getSender();
-        $creator = $conversation->getCreator();
-        $avatar  = is_null($creator) ? "/assets/packages/static/openvk/img/messages.svg" : $creator->getAvatarURL('miniscule');
+        $avatar  = $conversation->getAvatarURL('miniscule', $this->user->identity);
 
         return [
             "url"          => $conversation->getURL(),
@@ -70,6 +69,14 @@ final class MessengerPresenter extends OpenVKPresenter
                 "senderAvatar" => is_null($author) ? null : $author->getAvatarURL('miniscule'),
             ],
         ];
+    }
+
+    private function serializeConversationMessage(Conversation $conversation, Message $message): array
+    {
+        $data = $message->simplify();
+        $data["read"] = $conversation->isMessageReadFor($message, $this->user->identity);
+
+        return $data;
     }
 
     private function serializeCorrespondence(Correspondence $correspondence): array
@@ -285,7 +292,7 @@ final class MessengerPresenter extends OpenVKPresenter
 
         $messages = [];
         foreach ($conversation->getMessages(1, $lastMsg === 0 ? null : $lastMsg, null, 0) as $message) {
-            $messages[] = $message->simplify();
+            $messages[] = $this->serializeConversationMessage($conversation, $message);
         }
 
         header("Content-Type: application/json");
@@ -362,6 +369,6 @@ final class MessengerPresenter extends OpenVKPresenter
 
         header("HTTP/1.1 202 Accepted");
         header("Content-Type: application/json");
-        exit(json_encode($msg->simplify()));
+        exit(json_encode($this->serializeConversationMessage($conversation, $msg)));
     }
 }

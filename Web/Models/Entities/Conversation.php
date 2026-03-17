@@ -99,6 +99,18 @@ class Conversation extends RowModel
         return $participants;
     }
 
+    public function getDisplayParticipants(?RowModel $viewer = null): array
+    {
+        $participants = $this->getParticipants();
+        if (!is_null($viewer)) {
+            $participants = array_values(array_filter($participants, fn (RowModel $participant): bool => !(
+                get_class($participant) === get_class($viewer) && $participant->getId() === $viewer->getId()
+            )));
+        }
+
+        return $participants;
+    }
+
     public function getParticipantCount(bool $activeOnly = true): int
     {
         $selection = $this->participants->where("conversation_id", $this->getId());
@@ -176,6 +188,21 @@ class Conversation extends RowModel
         return (int) $relation->last_read_message_id < $lastMessage->getId();
     }
 
+    public function isMessageReadFor(Message $message, RowModel $participant): bool
+    {
+        $sender = $message->getSender();
+        if (!is_null($sender) && get_class($sender) === get_class($participant) && $sender->getId() === $participant->getId()) {
+            return true;
+        }
+
+        $relation = $this->getParticipantRelation($participant);
+        if (is_null($relation) || is_null($relation->last_read_message_id)) {
+            return false;
+        }
+
+        return (int) $relation->last_read_message_id >= $message->getId();
+    }
+
     public function sendMessage(Message $message, ?RowModel $sender = null)
     {
         $sender ??= (new Users())->getByChandlerUser(Authenticator::i()->getUser());
@@ -194,7 +221,7 @@ class Conversation extends RowModel
         $message->setRecipient_Type(User::class);
         $message->setConversation_Id($this->getId());
         $message->setCreated(time());
-        $message->setUnread(1);
+        $message->setUnread(0);
         $message->save();
 
         $this->setUpdated(time());
@@ -215,19 +242,29 @@ class Conversation extends RowModel
 
     public function getPreviewSubtitle(?RowModel $viewer = null): string
     {
-        $participants = $this->getParticipants();
-        if (!is_null($viewer)) {
-            $participants = array_values(array_filter($participants, fn (RowModel $participant): bool => !(
-                get_class($participant) === get_class($viewer) && $participant->getId() === $viewer->getId()
-            )));
-        }
-
+        $participants = $this->getDisplayParticipants($viewer);
         $names = array_map(fn (RowModel $participant): string => $participant->getCanonicalName(), $participants);
         if (sizeof($names) < 1) {
             return "Только вы";
         }
 
         return implode(", ", array_slice($names, 0, 3));
+    }
+
+    public function getAvatarURL(string $size = "miniscule", ?RowModel $viewer = null): string
+    {
+        $participants = $this->getDisplayParticipants($viewer);
+        if (sizeof($participants) > 0) {
+            return $participants[0]->getAvatarURL($size);
+        }
+
+        $creator = $this->getCreator();
+        if (!is_null($creator)) {
+            return $creator->getAvatarURL($size);
+        }
+
+        $serverUrl = ovk_scheme(true) . $_SERVER["HTTP_HOST"];
+        return "$serverUrl/assets/packages/static/openvk/img/messages.svg";
     }
 
     public function markReadUpTo(?Message $message): void

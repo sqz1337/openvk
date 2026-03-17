@@ -10,7 +10,6 @@
 {/block}
 
 {block wrap}
-    {var $creator = $conversation->getCreator()}
     <div class="messenger-app">
         <div class="messenger-app--messages" data-bind="event: { scroll: onMessagesScroll }">
             <div data-bind="foreach: messages">
@@ -37,7 +36,7 @@
                         placeholder="{_enter_message}"></textarea>
                 <button class="button" data-bind="click: sendMessage">{_send}</button>
             </div>
-            <img class="ava" src="{if $creator}{$creator->getAvatarUrl('miniscule')}{else}/assets/packages/static/openvk/img/messages.svg{/if}" alt="{$conversation->getTitle()}" />
+            <img class="ava" src="{$conversation->getAvatarURL('miniscule', $thisUser)}" alt="{$conversation->getTitle()}" />
         </div>
     </div>
 

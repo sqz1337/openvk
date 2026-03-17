@@ -25,11 +25,10 @@
                  class="scroll_node crp-entry"
                  onmousedown="window.location.assign({$conversation->getURL()});" >
                 {var $lastMsg = $conversation->getLastMessage()}
-                {var $creator = $conversation->getCreator()}
                 {var $author = $lastMsg ? $lastMsg->getSender() : null}
 
                 <div class="crp-entry--image">
-                    <img src="{if $creator}{$creator->getAvatarURL('miniscule')}{else}/assets/packages/static/openvk/img/messages.svg{/if}"
+                    <img src="{$conversation->getAvatarURL('miniscule', $thisUser)}"
                     alt="Аватар беседы" loading=lazy />
                 </div>
                 <div class="crp-entry--info">
