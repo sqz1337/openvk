@@ -99,8 +99,9 @@ class Conversation extends RowModel
             $selection = $selection->where("deleted", 0)->where("left_at IS NULL");
         }
 
+        $rows = iterator_to_array($selection);
         $participants = [];
-        foreach ($selection as $participant) {
+        foreach ($rows as $participant) {
             $entity = $this->resolveParticipant($participant->participant_type, (int) $participant->participant_id);
             if (!is_null($entity)) {
                 $participants[] = $entity;
