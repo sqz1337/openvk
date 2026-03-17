@@ -116,7 +116,7 @@
                     cache: "no-store"
                 });
                 if(!resp.ok) {
-                    throw new Error(`Failed to fetch messages: ${resp.status}`);
+                    throw new Error("Failed to fetch messages: " + resp.status);
                 }
 
                 return await resp.json();
