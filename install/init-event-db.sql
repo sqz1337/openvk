@@ -15,7 +15,7 @@ CREATE TABLE `notifications` (
   `originModelId` bigint(20) UNSIGNED NOT NULL,
   `targetModelType` tinyint(3) UNSIGNED NOT NULL,
   `targetModelId` bigint(20) UNSIGNED NOT NULL,
-  `modelAction` tinyint(3) UNSIGNED NOT NULL,
+  `modelAction` smallint(5) UNSIGNED NOT NULL,
   `additionalData` char(24) NOT NULL,
   `timestamp` bigint(20) UNSIGNED NOT NULL
 ) ENGINE=Aria DEFAULT CHARSET=utf8;
