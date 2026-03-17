@@ -44,6 +44,7 @@ class Conversations extends Repository
                 "deleted"          => 0,
             ])
             ->where("left_at IS NULL")
+            ->order("id DESC")
             ->limit($perPage, $offset);
 
         foreach ($selection as $relation) {
@@ -65,5 +66,14 @@ class Conversations extends Repository
             ])
             ->where("left_at IS NULL")
             ->count("*");
+    }
+
+    public function addParticipants(Conversation $conversation, array $participants): void
+    {
+        foreach ($participants as $participant) {
+            if ($participant instanceof RowModel) {
+                $conversation->addParticipant($participant);
+            }
+        }
     }
 }

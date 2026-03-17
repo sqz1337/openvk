@@ -8,6 +8,9 @@
         <div id="activetabs" class="tab">
             <a id="act_tab_a" href="javascript:false">{_all_messages}</a>
         </div>
+        <div class="tab" style="float: right;">
+            <a href="/im/create-conversation">Новая беседа</a>
+        </div>
     </div>
 
     <div class="container_gray">
@@ -16,8 +19,39 @@
         </form>
     </div>
 
-    {if sizeof($corresps) > 0}
+    {if sizeof($conversations) > 0 || sizeof($corresps) > 0}
         <div class="crp-list scroll_container" id="messenger-index-list">
+            <div n:foreach="$conversations as $conversation"
+                 class="scroll_node crp-entry"
+                 onmousedown="window.location.assign({$conversation->getURL()});" >
+                {var $lastMsg = $conversation->getLastMessage()}
+                {var $creator = $conversation->getCreator()}
+                {var $author = $lastMsg ? $lastMsg->getSender() : null}
+
+                <div class="crp-entry--image">
+                    <img src="{if $creator}{$creator->getAvatarURL('miniscule')}{else}/assets/packages/static/openvk/img/messages.svg{/if}"
+                    alt="Аватар беседы" loading=lazy />
+                </div>
+                <div class="crp-entry--info">
+                    <a href="{$conversation->getURL()}">{$conversation->getTitle()}</a><br/>
+                    <span>{$conversation->getPreviewSubtitle($thisUser)}</span><br/>
+                    <span>{if $lastMsg}{$lastMsg->getSendTimeHumanized()}{else}{$conversation->getCreatedTime()}{/if}</span>
+                </div>
+                <div n:class="crp-entry--message, $conversation->getUnreadStateFor($thisUser) ? unread">
+                    <div class="crp-entry--message---av" n:if="$author && $author->getId() === $thisUser->getId()">
+                        <img src="{$author->getAvatarURL('miniscule')}"
+                        alt="Фотография пользователя" />
+                    </div>
+                    <div class="crp-entry--message---text">
+                        {if $lastMsg}
+                            {$lastMsg->getText()|noescape}
+                        {else}
+                            Сообщений пока нет
+                        {/if}
+                    </div>
+                </div>
+            </div>
+
             <div n:foreach="$corresps as $coresp"
                  class="scroll_node crp-entry"
                  onmousedown="window.location.assign({$coresp->getURL()});" >

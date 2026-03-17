@@ -1,0 +1,315 @@
+{extends "../@layout.latte"}
+{block title}{$conversation->getTitle()}{/block}
+
+{block header}
+<a href="/im">{_my_messages}</a> »
+{$conversation->getTitle()}
+<div style="float: right; max-width: 50%; text-align: right;">
+    {$conversation->getPreviewSubtitle($thisUser)}
+</div>
+{/block}
+
+{block wrap}
+    {var $creator = $conversation->getCreator()}
+    <div class="messenger-app">
+        <div class="messenger-app--messages" data-bind="event: { scroll: onMessagesScroll }">
+            <div data-bind="foreach: messages">
+                <div class="messenger-app--messages---message" data-bind="css: { unread: !read }">
+                    <img class="ava" data-bind="attr: { src: sender.avatar, alt: sender.name }" />
+                    <div class="_content">
+                        <a href="#" data-bind="attr: { href: sender.link }">
+                            <strong data-bind="text: sender.name"></strong>
+                        </a>
+                        <span class="text" data-bind="html: text"></span>
+                    </div>
+                    <div class="time" align="right">
+                        <span data-bind="html: timing.sent"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="messenger-app--input">
+            <img class="ava" src="{$thisUser->getAvatarUrl('miniscule')}" alt="{$thisUser->getCanonicalName()}" />
+            <div class="messenger-app--input---messagebox">
+                <textarea
+                        data-bind="value: messageContent, event: { keydown: onTextareaKeyPress }"
+                        name="message"
+                        placeholder="{_enter_message}"></textarea>
+                <button class="button" data-bind="click: sendMessage">{_send}</button>
+            </div>
+            <img class="ava" src="{if $creator}{$creator->getAvatarUrl('miniscule')}{else}/assets/packages/static/openvk/img/messages.svg{/if}" alt="{$conversation->getTitle()}" />
+        </div>
+    </div>
+
+    {script "js/node_modules/knockout/build/output/knockout-latest.js"}
+    <script>
+        function ConversationViewModel(initialMessages = []) {
+            window.messages     = ko.observableArray(initialMessages);
+            this.messages       = window.messages;
+            this.messageContent = ko.observable("");
+
+            this.sendMessage = model => {
+                if(model.messageContent() === "") return false;
+
+                window.Conv.sendMessage(model.messageContent());
+                model.messageContent("");
+            };
+            this.loadHistory = _ => {
+                window.Conv._loadHistory();
+            };
+
+            this.onMessagesScroll = (model, e) => {
+                if(e.target.scrollTop < 21)
+                    model.loadHistory();
+            };
+            this.onTextareaKeyPress = (model, e) => {
+                if(e.which === 13) {
+                    if(!e.metaKey && !e.shiftKey) {
+                        let ta = u("textarea[name=message]").nodes[0];
+                        ta.blur();
+                        model.sendMessage(model);
+                        ta.focus();
+
+                        return false;
+                    }
+                }
+
+                return true;
+            };
+        }
+
+        class ConversationMessenger {
+            constructor(messages = []) {
+                this.ko     = ko.applyBindings(new ConversationViewModel(messages));
+                this.appEl  = document.querySelector(".messenger-app--messages");
+                this.offset = 0;
+                this.latest = 0;
+                this.loadingHistory = false;
+                this.polling = false;
+
+                this._loadHistory(true);
+                this._setupPolling();
+            }
+
+            async _fetchMessages(offset = 0) {
+                let url = "/im/api/conversations" + {$conversation->getId()} + "/" + offset + ".json?_poll=" + Date.now();
+                let resp = await fetch(url, {
+                    credentials: "same-origin",
+                    cache: "no-store"
+                });
+                if(!resp.ok) {
+                    throw new Error("Failed to fetch conversation messages: " + resp.status);
+                }
+
+                return await resp.json();
+            }
+
+            _rememberBounds(messages) {
+                if(messages.length < 1) {
+                    return;
+                }
+
+                let ids = messages.map(message => message.uuid);
+                let min = Math.min(...ids);
+                let max = Math.max(...ids);
+
+                if(this.offset === 0 || min < this.offset) {
+                    this.offset = min;
+                }
+
+                if(this.latest === 0 || max > this.latest) {
+                    this.latest = max;
+                }
+            }
+
+            _hasMessage(uuid) {
+                return window.messages().some(message => message.uuid === uuid);
+            }
+
+            _syncExistingMessages(messages) {
+                if(messages.length < 1) {
+                    return;
+                }
+
+                let changed = false;
+                let currentMessages = window.messages();
+                let incoming = new Map(messages.map(message => [message.uuid, message]));
+
+                for(let i = 0; i < currentMessages.length; i++) {
+                    let current = currentMessages[i];
+                    let updated = incoming.get(current.uuid);
+                    if(typeof updated === "undefined") {
+                        continue;
+                    }
+
+                    if(current.read !== updated.read) {
+                        currentMessages[i] = updated;
+                        changed = true;
+                    }
+                }
+
+                if(changed) {
+                    window.messages.valueWillMutate();
+                    window.messages.valueHasMutated();
+                }
+            }
+
+            async _loadHistory(scroll = false) {
+                if(this.loadingHistory) {
+                    return;
+                }
+
+                this.loadingHistory = true;
+                try {
+                    let messages = await this._fetchMessages(this.offset);
+                    this._syncExistingMessages(messages);
+                    let unseen = messages.filter(message => !this._hasMessage(message.uuid));
+                    let lastMessage = unseen[unseen.length - 1];
+                    if(typeof lastMessage !== "undefined") {
+                        this.offset = lastMessage.uuid;
+                    }
+
+                    this._rememberBounds(unseen);
+                    this.prependMessages(unseen);
+
+                    if(scroll) {
+                        this.appEl.scrollTop = this.appEl.scrollHeight;
+                    }
+                } catch (error) {
+                    console.error("Failed to load conversation history", error);
+                } finally {
+                    this.loadingHistory = false;
+                }
+            }
+
+            _setupPolling() {
+                window.setInterval(() => this._pollLatest(), 3000);
+            }
+
+            async _pollLatest() {
+                if(this.polling) {
+                    return;
+                }
+
+                this.polling = true;
+                try {
+                    let messages = await this._fetchMessages(0);
+                    this._syncExistingMessages(messages);
+                    let unseen = messages
+                        .filter(message => !this._hasMessage(message.uuid))
+                        .sort((a, b) => a.uuid - b.uuid);
+
+                    if(unseen.length < 1) {
+                        return;
+                    }
+
+                    let shouldScroll = this.appEl.scrollHeight - this.appEl.scrollTop - this.appEl.clientHeight < 80;
+                    unseen.forEach(message => this.addMessage(message, false));
+                    this._rememberBounds(unseen);
+
+                    if(shouldScroll) {
+                        this.appEl.scrollTop = this.appEl.scrollHeight;
+                    }
+                } catch (error) {
+                    console.error("Failed to poll new conversation messages", error);
+                } finally {
+                    this.polling = false;
+                }
+            }
+
+            appendMessages(messages) {
+                messages.forEach(m => window.messages.push(m));
+            }
+
+            prependMessages(messages) {
+                messages.forEach(m => window.messages.unshift(m));
+            }
+
+            addMessage(message, scroll = true) {
+                this.appendMessages([message]);
+
+                if(scroll) {
+                    this.appEl.scrollTop = this.appEl.scrollHeight;
+                }
+            }
+
+            _patchMessage(tempId, message) {
+                for(let i = window.messages().length - 1; i > -1; i--) {
+                    let msg = window.messages()[i];
+                    if(typeof msg._tuid === "undefined")
+                        return;
+                    else if(msg._tuid !== tempId)
+                        return;
+
+                    window.messages.valueWillMutate();
+                    window.messages()[i] = message;
+                    window.messages.valueHasMutated();
+                }
+            }
+
+            _newSelfMessage(content = "...") {
+                return {
+                    "sender": {
+                        "link": {$thisUser->getURL()},
+                        "avatar": {$thisUser->getAvatarUrl()},
+                        "name": {$thisUser->getFirstName()}
+                    },
+                    "timing": {
+                        "sent": window.API.Service.getTime(),
+                        "edited": null
+                    },
+                    "text": content,
+                    "read": false,
+                    "attachments": [],
+                    "_tuid": Math.ceil(performance.now())
+                };
+            }
+
+            newMessage(content) {
+                let msg = this._newSelfMessage(content);
+                msg.timing.sent = "<img src=\"/assets/packages/static/openvk/img/loading_mini.gif\">";
+                this.addMessage(msg);
+
+                return msg._tuid;
+            }
+
+            sendMessage(content) {
+                let tempId = this.newMessage(escapeHtml(content));
+                let msgData = new FormData();
+                msgData.set("content", content);
+                msgData.set("hash", {$csrfToken});
+
+                let that = this;
+                let xhr = new XMLHttpRequest();
+                xhr.open("POST", "/im/api/conversations" + {$conversation->getId()} + "/create.json", true);
+                xhr.onreadystatechange = (function() {
+                    if(this.readyState !== 4)
+                        return;
+                    else if(this.status !== 202) {
+                        that._patchMessage(tempId, {
+                            sender: {
+                                avatar: "/assets/packages/static/openvk/img/oof.apng",
+                                id: -1,
+                                link: "/support/manpages/messages/not-delivered.html",
+                                name: tr("messages_error_1")
+                            },
+                            text: tr("messages_error_1_description"),
+                            timing: {
+                                edited: null,
+                                sent: "???"
+                            },
+                            uuid: -4096
+                        });
+
+                        return;
+                    }
+
+                    that._patchMessage(tempId, JSON.parse(xhr.responseText));
+                });
+                xhr.send(msgData);
+            }
+        }
+
+        window.Conv = new ConversationMessenger([]);
+    </script>
+{/block}

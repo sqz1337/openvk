@@ -6,18 +6,20 @@ namespace openvk\Web\Presenters;
 
 use Chandler\Signaling\SignalManager;
 use openvk\Web\Events\NewMessageEvent;
-use openvk\Web\Models\Repositories\{Users, Clubs, Messages};
-use openvk\Web\Models\Entities\{Message, Correspondence};
+use openvk\Web\Models\Repositories\{Users, Clubs, Messages, Conversations};
+use openvk\Web\Models\Entities\{Message, Correspondence, Conversation};
 
 final class MessengerPresenter extends OpenVKPresenter
 {
     private $messages;
+    private $conversations;
     private $signaler;
     protected $presenterName = "messenger";
 
-    public function __construct(Messages $messages)
+    public function __construct(Messages $messages, Conversations $conversations)
     {
         $this->messages = $messages;
+        $this->conversations = $conversations;
         $this->signaler = SignalManager::i();
 
         parent::__construct();
@@ -39,6 +41,35 @@ final class MessengerPresenter extends OpenVKPresenter
         } elseif ($id === 0) {
             return $this->user->identity;
         }
+    }
+
+    private function getConversation(int $id): ?Conversation
+    {
+        return $this->conversations->get($id);
+    }
+
+    private function serializeConversation(Conversation $conversation): array
+    {
+        $lastMsg = $conversation->getLastMessage();
+        $author  = is_null($lastMsg) ? null : $lastMsg->getSender();
+        $creator = $conversation->getCreator();
+        $avatar  = is_null($creator) ? "/assets/packages/static/openvk/img/messages.svg" : $creator->getAvatarURL('miniscule');
+
+        return [
+            "url"          => $conversation->getURL(),
+            "title"        => $conversation->getTitle(),
+            "subtitle"     => $conversation->getPreviewSubtitle($this->user->identity),
+            "avatar"       => $avatar,
+            "participantCount" => $conversation->getParticipantCount(),
+            "lastMessage"  => is_null($lastMsg) ? null : [
+                "uuid"         => $lastMsg->getId(),
+                "text"         => $lastMsg->getText(),
+                "time"         => $lastMsg->getSendTimeHumanized(),
+                "unread"       => $conversation->getUnreadStateFor($this->user->identity),
+                "senderOwn"    => !is_null($author) && $author->getId() === $this->user->identity->getId(),
+                "senderAvatar" => is_null($author) ? null : $author->getAvatarURL('miniscule'),
+            ],
+        ];
     }
 
     private function serializeCorrespondence(Correspondence $correspondence): array
@@ -75,9 +106,11 @@ final class MessengerPresenter extends OpenVKPresenter
 
         $page = (int) ($_GET["p"] ?? 1);
         $correspondences = iterator_to_array($this->messages->getCorrespondencies($this->user->identity, $page));
+        $conversations   = iterator_to_array($this->conversations->byParticipant($this->user->identity, 1));
 
         // #КакаоПрокакалось
 
+        $this->template->conversations = $conversations;
         $this->template->corresps = $correspondences;
         $this->template->paginatorConf = (object) [
             "count"   => $this->messages->getCorrespondenciesCount($this->user->identity),
@@ -105,6 +138,63 @@ final class MessengerPresenter extends OpenVKPresenter
         $this->template->disable_ajax  = 1;
         $this->template->selId         = $sel;
         $this->template->correspondent = $correspondent;
+    }
+
+    public function renderCreateConversation(): void
+    {
+        $this->assertUserLoggedIn();
+    }
+
+    public function renderCreateConversationCommit(): void
+    {
+        $this->assertUserLoggedIn();
+        $this->willExecuteWriteAction();
+
+        $rawParticipants = trim((string) $this->postParam("participants"));
+        $title = trim((string) $this->postParam("title"));
+        $ids = array_values(array_unique(array_filter(array_map("intval", preg_split('/[\s,;]+/', $rawParticipants) ?: []))));
+
+        if (sizeof($ids) < 1) {
+            $this->flash("err", tr("error"), "Укажите хотя бы одного участника.");
+            $this->redirect("/im/create-conversation");
+        }
+
+        $participants = [];
+        foreach ($ids as $id) {
+            if ($id === $this->user->identity->getId() || $id < 1) {
+                continue;
+            }
+
+            $user = (new Users())->get($id);
+            if (!is_null($user)) {
+                $participants[] = $user;
+            }
+        }
+
+        if (sizeof($participants) < 1) {
+            $this->flash("err", tr("error"), "Не удалось найти участников беседы.");
+            $this->redirect("/im/create-conversation");
+        }
+
+        $conversation = $this->conversations->create($this->user->identity, $title === "" ? null : $title);
+        $this->conversations->addParticipants($conversation, $participants);
+
+        $this->flash("succ", tr("changes_saved"), "Беседа создана.");
+        $this->redirect($conversation->getURL());
+    }
+
+    public function renderConversation(int $id): void
+    {
+        $this->assertUserLoggedIn();
+
+        $conversation = $this->getConversation($id);
+        if (is_null($conversation) || !$conversation->isParticipant($this->user->identity)) {
+            $this->notFound();
+        }
+
+        $this->template->disable_ajax = 1;
+        $this->template->conversation = $conversation;
+        $this->template->participants = $conversation->getParticipants();
     }
 
     public function renderEvents(int $randNum): void
@@ -184,12 +274,41 @@ final class MessengerPresenter extends OpenVKPresenter
         exit(json_encode($messages));
     }
 
+    public function renderApiGetConversationMessages(int $id, int $lastMsg): void
+    {
+        $this->assertUserLoggedIn();
+
+        $conversation = $this->getConversation($id);
+        if (is_null($conversation) || !$conversation->isParticipant($this->user->identity)) {
+            $this->notFound();
+        }
+
+        $messages = [];
+        foreach ($conversation->getMessages(1, $lastMsg === 0 ? null : $lastMsg, null, 0) as $message) {
+            $messages[] = $message->simplify();
+        }
+
+        header("Content-Type: application/json");
+        exit(json_encode($messages));
+    }
+
     public function renderApiList(int $page = 1): void
     {
         $this->assertUserLoggedIn();
 
         $correspondences = iterator_to_array($this->messages->getCorrespondencies($this->user->identity, $page));
         $payload = array_map(fn (Correspondence $correspondence): array => $this->serializeCorrespondence($correspondence), $correspondences);
+
+        header("Content-Type: application/json");
+        exit(json_encode($payload));
+    }
+
+    public function renderApiConversationList(int $page = 1): void
+    {
+        $this->assertUserLoggedIn();
+
+        $conversations = iterator_to_array($this->conversations->byParticipant($this->user->identity, $page));
+        $payload = array_map(fn (Conversation $conversation): array => $this->serializeConversation($conversation), $conversations);
 
         header("Content-Type: application/json");
         exit(json_encode($payload));
@@ -215,6 +334,31 @@ final class MessengerPresenter extends OpenVKPresenter
         $msg = new Message();
         $msg->setContent($this->postParam("content"));
         $cor->sendMessage($msg);
+
+        header("HTTP/1.1 202 Accepted");
+        header("Content-Type: application/json");
+        exit(json_encode($msg->simplify()));
+    }
+
+    public function renderApiWriteConversationMessage(int $id): void
+    {
+        $this->assertUserLoggedIn();
+        $this->willExecuteWriteAction();
+
+        if (empty($this->postParam("content"))) {
+            header("HTTP/1.1 400 Bad Request");
+            exit("<b>Argument error</b>: param 'content' expected to be string, undefined given.");
+        }
+
+        $conversation = $this->getConversation($id);
+        if (is_null($conversation) || !$conversation->isParticipant($this->user->identity)) {
+            header("HTTP/1.1 403 Forbidden");
+            exit();
+        }
+
+        $msg = new Message();
+        $msg->setContent($this->postParam("content"));
+        $conversation->sendMessage($msg, $this->user->identity);
 
         header("HTTP/1.1 202 Accepted");
         header("Content-Type: application/json");
