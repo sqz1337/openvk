@@ -144,6 +144,34 @@
                 return window.messages().some(message => message.uuid === uuid);
             }
 
+            _syncExistingMessages(messages) {
+                if(messages.length < 1) {
+                    return;
+                }
+
+                let changed = false;
+                let currentMessages = window.messages();
+                let incoming = new Map(messages.map(message => [message.uuid, message]));
+
+                for(let i = 0; i < currentMessages.length; i++) {
+                    let current = currentMessages[i];
+                    let updated = incoming.get(current.uuid);
+                    if(typeof updated === "undefined") {
+                        continue;
+                    }
+
+                    if(current.read !== updated.read) {
+                        currentMessages[i] = updated;
+                        changed = true;
+                    }
+                }
+
+                if(changed) {
+                    window.messages.valueWillMutate();
+                    window.messages.valueHasMutated();
+                }
+            }
+
             async _loadHistory(scroll = false) {
                 if(this.loadingHistory) {
                     return;
@@ -152,6 +180,7 @@
                 this.loadingHistory = true;
                 try {
                     let messages = await this._fetchMessages(this.offset);
+                    this._syncExistingMessages(messages);
                     let unseen = messages.filter(message => !this._hasMessage(message.uuid));
                     let lastMessage = unseen[unseen.length - 1];
                     if(typeof lastMessage !== "undefined") {
@@ -183,6 +212,7 @@
                 this.polling = true;
                 try {
                     let messages = await this._fetchMessages(0);
+                    this._syncExistingMessages(messages);
                     let unseen = messages
                         .filter(message => !this._hasMessage(message.uuid))
                         .sort((a, b) => a.uuid - b.uuid);
