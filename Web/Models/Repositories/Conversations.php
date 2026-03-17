@@ -49,7 +49,7 @@ class Conversations extends Repository
 
         foreach ($selection as $relation) {
             $conversation = $this->get((int) $relation->conversation_id);
-            if (!is_null($conversation) && !(bool) $conversation->getRecord()->deleted) {
+            if (!is_null($conversation) && !$conversation->isDeleted()) {
                 yield $conversation;
             }
         }
