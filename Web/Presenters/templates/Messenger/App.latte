@@ -103,7 +103,7 @@
                 this.offset = 0;
                 
                 this._loadHistory();
-                this._setupListener();
+                // Temporarily disable long-poll while investigating request stalls.
                 this.appEl.scrollTop = this.appEl.scrollHeight;
             }
             
