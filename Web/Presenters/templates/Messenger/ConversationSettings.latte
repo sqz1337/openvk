@@ -1,0 +1,33 @@
+{extends "../@layout.latte"}
+{block title}Настройки беседы{/block}
+
+{block header}
+<a href="/im">{_my_messages}</a> »
+<a href="{$conversation->getURL()}">{$conversation->getTitle()}</a> »
+Настройки беседы
+{/block}
+
+{block content}
+    <div class="container_gray" style="padding: 16px;">
+        <form method="POST" action="{$conversation->getSettingsURL()}/save" enctype="multipart/form-data">
+            <input type="hidden" name="hash" value="{$csrfToken}" />
+
+            <div style="margin-bottom: 16px;">
+                <div style="margin-bottom: 8px;"><strong>Текущая аватарка</strong></div>
+                <img src="{$conversation->getAvatarURL('normal', $thisUser)}" alt="Аватар беседы" style="width: 120px; height: 120px; object-fit: cover; border-radius: 8px;" />
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <label for="conversation-title"><strong>Название беседы</strong></label><br/>
+                <input id="conversation-title" type="text" name="title" maxlength="128" value="{$conversation->getTitle()}" style="width: 100%;" />
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <label for="conversation-avatar"><strong>Новая аватарка</strong></label><br/>
+                <input id="conversation-avatar" type="file" name="avatar" accept="image/jpeg,image/png,image/gif,image/webp" />
+            </div>
+
+            <button class="button" type="submit">Сохранить</button>
+        </form>
+    </div>
+{/block}

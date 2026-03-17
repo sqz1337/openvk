@@ -204,6 +204,69 @@ final class MessengerPresenter extends OpenVKPresenter
         $this->template->participants = $conversation->getParticipants();
     }
 
+    public function renderConversationSettings(int $id): void
+    {
+        $this->assertUserLoggedIn();
+
+        $conversation = $this->getConversation($id);
+        if (is_null($conversation) || !$conversation->isParticipant($this->user->identity)) {
+            $this->notFound();
+        }
+        if (!$conversation->canBeModifiedBy($this->user->identity)) {
+            $this->flash("err", tr("error"), "Недостаточно прав для изменения беседы.");
+            $this->redirect($conversation->getURL());
+        }
+
+        $this->template->conversation = $conversation;
+    }
+
+    public function renderConversationSettingsSave(int $id): void
+    {
+        $this->assertUserLoggedIn();
+        $this->willExecuteWriteAction();
+
+        $conversation = $this->getConversation($id);
+        if (is_null($conversation) || !$conversation->isParticipant($this->user->identity)) {
+            $this->notFound();
+        }
+        if (!$conversation->canBeModifiedBy($this->user->identity)) {
+            $this->flash("err", tr("error"), "Недостаточно прав для изменения беседы.");
+            $this->redirect($conversation->getURL());
+        }
+
+        $title = trim((string) $this->postParam("title"));
+        $conversation->setTitle($title === "" ? null : ovk_proc_strtr($title, 128));
+
+        if (isset($_FILES["avatar"]) && $_FILES["avatar"]["error"] === UPLOAD_ERR_OK) {
+            $this->storeConversationAvatar($conversation, $_FILES["avatar"]);
+        }
+
+        $conversation->setUpdated(time());
+        $conversation->save();
+
+        $this->flash("succ", tr("changes_saved"), "Настройки беседы сохранены.");
+        $this->redirect($conversation->getSettingsURL());
+    }
+
+    public function renderConversationAvatar(int $id): void
+    {
+        $conversation = $this->getConversation($id);
+        if (is_null($conversation)) {
+            $this->notFound();
+        }
+
+        $path = $conversation->getAvatarPath();
+        if (is_null($path) || !is_file($path)) {
+            $this->notFound();
+        }
+
+        header("Content-Type: " . mime_content_type($path));
+        header("Content-Length: " . filesize($path));
+        header("Cache-Control: public, max-age=86400");
+        readfile($path);
+        exit;
+    }
+
     public function renderEvents(int $randNum): void
     {
         $this->assertUserLoggedIn();
@@ -370,5 +433,47 @@ final class MessengerPresenter extends OpenVKPresenter
         header("HTTP/1.1 202 Accepted");
         header("Content-Type: application/json");
         exit(json_encode($this->serializeConversationMessage($conversation, $msg)));
+    }
+
+    private function storeConversationAvatar(Conversation $conversation, array $upload): void
+    {
+        $imageInfo = @getimagesize($upload["tmp_name"]);
+        if ($imageInfo === false) {
+            $this->flash("err", tr("error"), "Нужно загрузить изображение.");
+            $this->redirect($conversation->getSettingsURL());
+        }
+
+        $mimeToExtension = [
+            "image/jpeg" => "jpg",
+            "image/png"  => "png",
+            "image/gif"  => "gif",
+            "image/webp" => "webp",
+        ];
+
+        $mime = $imageInfo["mime"] ?? "";
+        if (!isset($mimeToExtension[$mime])) {
+            $this->flash("err", tr("error"), "Поддерживаются только JPG, PNG, GIF и WEBP.");
+            $this->redirect($conversation->getSettingsURL());
+        }
+
+        $dir = OPENVK_ROOT . "/storage/conversations";
+        if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+            $this->flash("err", tr("error"), "Не удалось создать директорию для аватаров бесед.");
+            $this->redirect($conversation->getSettingsURL());
+        }
+
+        $fileName = "conversation_" . $conversation->getId() . "_" . bin2hex(random_bytes(8)) . "." . $mimeToExtension[$mime];
+        $target = $dir . "/" . $fileName;
+        if (!move_uploaded_file($upload["tmp_name"], $target)) {
+            $this->flash("err", tr("error"), "Не удалось сохранить аватар беседы.");
+            $this->redirect($conversation->getSettingsURL());
+        }
+
+        $oldPath = $conversation->getAvatarPath();
+        if (!is_null($oldPath) && is_file($oldPath)) {
+            @unlink($oldPath);
+        }
+
+        $conversation->setAvatar_File($fileName);
     }
 }

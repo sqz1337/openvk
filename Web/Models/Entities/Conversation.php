@@ -35,6 +35,11 @@ class Conversation extends RowModel
         return "/im/c" . $this->getId();
     }
 
+    public function getSettingsURL(): string
+    {
+        return "/im/c" . $this->getId() . "/settings";
+    }
+
     public function getCreator(): ?User
     {
         return (new Users())->get((int) $this->getRecord()->creator);
@@ -43,6 +48,12 @@ class Conversation extends RowModel
     public function getCreatedTime(): DateTime
     {
         return new DateTime((int) $this->getRecord()->created);
+    }
+
+    public function canBeModifiedBy(RowModel $participant): bool
+    {
+        $relation = $this->getParticipantRelation($participant);
+        return !is_null($relation) && ((bool) $relation->is_admin || $this->getCreator()?->getId() === $participant->getId());
     }
 
     public function getUpdatedTime(): DateTime
@@ -253,6 +264,11 @@ class Conversation extends RowModel
 
     public function getAvatarURL(string $size = "miniscule", ?RowModel $viewer = null): string
     {
+        $avatarFile = $this->getRecord()->avatar_file ?? null;
+        if (!is_null($avatarFile) && $avatarFile !== "") {
+            return ovk_scheme(true) . $_SERVER["HTTP_HOST"] . "/im/c" . $this->getId() . "/avatar";
+        }
+
         $participants = $this->getDisplayParticipants($viewer);
         if (sizeof($participants) > 0) {
             return $participants[0]->getAvatarURL($size);
@@ -265,6 +281,17 @@ class Conversation extends RowModel
 
         $serverUrl = ovk_scheme(true) . $_SERVER["HTTP_HOST"];
         return "$serverUrl/assets/packages/static/openvk/img/messages.svg";
+    }
+
+    public function getAvatarPath(): ?string
+    {
+        $avatarFile = $this->getRecord()->avatar_file ?? null;
+        if (is_null($avatarFile) || $avatarFile === "") {
+            return null;
+        }
+
+        $baseDir = OPENVK_ROOT . "/storage/conversations";
+        return $baseDir . "/" . basename($avatarFile);
     }
 
     public function markReadUpTo(?Message $message): void

@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS `conversations` (
   `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   `creator` bigint(20) UNSIGNED NOT NULL,
   `title` varchar(128) COLLATE utf8mb4_unicode_520_ci DEFAULT NULL,
+  `avatar_file` varchar(255) COLLATE utf8mb4_unicode_520_ci DEFAULT NULL,
   `created` bigint(20) UNSIGNED NOT NULL,
   `updated` bigint(20) UNSIGNED NOT NULL,
   `last_message_id` bigint(20) UNSIGNED DEFAULT NULL,

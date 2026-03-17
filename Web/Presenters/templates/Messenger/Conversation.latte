@@ -5,7 +5,11 @@
 <a href="/im">{_my_messages}</a> »
 {$conversation->getTitle()}
 <div style="float: right; max-width: 50%; text-align: right;">
-    {$conversation->getPreviewSubtitle($thisUser)}
+    {if $conversation->canBeModifiedBy($thisUser)}
+        <a class="button" href="{$conversation->getSettingsURL()}">Настройки беседы</a>
+    {else}
+        {$conversation->getPreviewSubtitle($thisUser)}
+    {/if}
 </div>
 {/block}
 
