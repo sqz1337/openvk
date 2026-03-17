@@ -449,12 +449,17 @@
         {ifset $thisUser}
             <script>
                 (function setupMessageCounterPolling() {
-                    const fullCounter = document.getElementById("layout-unread-messages");
-                    const miniCounter = document.getElementById("layout-unread-messages-mini");
-                    const fullWrapper = document.getElementById("layout-unread-messages-wrapper");
-                    const miniWrapper = document.getElementById("layout-unread-messages-mini-wrapper");
+                    if(window.__ovkMessageCounterPolling) {
+                        return;
+                    }
+                    window.__ovkMessageCounterPolling = true;
 
                     const updateCounters = count => {
+                        const fullCounter = document.getElementById("layout-unread-messages");
+                        const miniCounter = document.getElementById("layout-unread-messages-mini");
+                        const fullWrapper = document.getElementById("layout-unread-messages-wrapper");
+                        const miniWrapper = document.getElementById("layout-unread-messages-mini-wrapper");
+
                         if(fullCounter) {
                             fullCounter.textContent = count;
                             if(fullWrapper) {
