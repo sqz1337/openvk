@@ -55,6 +55,7 @@ final class MessengerPresenter extends OpenVKPresenter
                 "avatar" => $recipient->getAvatarURL('miniscule'),
             ],
             "lastMessage" => [
+                "uuid"       => $lastMsg->getId(),
                 "text"       => $lastMsg->getText(),
                 "time"       => $lastMsg->getSendTimeHumanized(),
                 "unread"     => (bool) $lastMsg->getUnreadState(),
