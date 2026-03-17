@@ -218,6 +218,7 @@ final class MessengerPresenter extends OpenVKPresenter
         }
 
         $this->template->conversation = $conversation;
+        $this->template->participants = $conversation->getParticipants();
     }
 
     public function renderConversationSettingsSave(int $id): void
@@ -245,6 +246,76 @@ final class MessengerPresenter extends OpenVKPresenter
         $conversation->save();
 
         $this->flash("succ", tr("changes_saved"), "Настройки беседы сохранены.");
+        $this->redirect($conversation->getSettingsURL());
+    }
+
+    public function renderConversationSettingsAddParticipants(int $id): void
+    {
+        $this->assertUserLoggedIn();
+        $this->willExecuteWriteAction();
+
+        $conversation = $this->getConversation($id);
+        if (is_null($conversation) || !$conversation->isParticipant($this->user->identity)) {
+            $this->notFound();
+        }
+        if (!$conversation->canBeModifiedBy($this->user->identity)) {
+            $this->flash("err", tr("error"), "Недостаточно прав для изменения беседы.");
+            $this->redirect($conversation->getURL());
+        }
+
+        $rawParticipants = trim((string) $this->postParam("participants"));
+        $ids = array_values(array_unique(array_filter(array_map("intval", preg_split('/[\s,;]+/', $rawParticipants) ?: []))));
+
+        $added = 0;
+        foreach ($ids as $id) {
+            if ($id < 1) {
+                continue;
+            }
+
+            $user = (new Users())->get($id);
+            if (is_null($user)) {
+                continue;
+            }
+
+            $conversation->addParticipant($user);
+            $added++;
+        }
+
+        if ($added > 0) {
+            $conversation->setUpdated(time());
+            $conversation->save();
+            $this->flash("succ", tr("changes_saved"), "Участники добавлены.");
+        } else {
+            $this->flash("err", tr("error"), "Не удалось добавить участников по указанным ID.");
+        }
+
+        $this->redirect($conversation->getSettingsURL());
+    }
+
+    public function renderConversationSettingsRemoveParticipant(int $id, int $participantId): void
+    {
+        $this->assertUserLoggedIn();
+        $this->willExecuteWriteAction();
+
+        $conversation = $this->getConversation($id);
+        if (is_null($conversation) || !$conversation->isParticipant($this->user->identity)) {
+            $this->notFound();
+        }
+        if (!$conversation->canBeModifiedBy($this->user->identity)) {
+            $this->flash("err", tr("error"), "Недостаточно прав для изменения беседы.");
+            $this->redirect($conversation->getURL());
+        }
+
+        $participant = (new Users())->get($participantId);
+        if (!is_null($participant)) {
+            $conversation->removeParticipant($participant);
+            $conversation->setUpdated(time());
+            $conversation->save();
+            $this->flash("succ", tr("changes_saved"), "Участник удалён из беседы.");
+        } else {
+            $this->flash("err", tr("error"), "Не удалось найти участника.");
+        }
+
         $this->redirect($conversation->getSettingsURL());
     }
 

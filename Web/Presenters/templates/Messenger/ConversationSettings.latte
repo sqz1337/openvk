@@ -30,4 +30,44 @@
             <button class="button" type="submit">Сохранить</button>
         </form>
     </div>
+
+    <div class="container_gray" style="padding: 16px; margin-top: 12px;">
+        <div style="margin-bottom: 12px;"><strong>Участники беседы</strong></div>
+
+        <div n:foreach="$participants as $participant" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid #ddd;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <img src="{$participant->getAvatarURL('miniscule')}" alt="{$participant->getCanonicalName()}" style="width: 40px; height: 40px;" />
+                <div>
+                    <a href="{$participant->getURL()}"><strong>{$participant->getCanonicalName()}</strong></a><br/>
+                    <span style="color: #666;">
+                        {if $conversation->getCreator() && $participant->getId() === $conversation->getCreator()->getId()}
+                            Создатель беседы
+                        {else}
+                            Участник
+                        {/if}
+                    </span>
+                </div>
+            </div>
+
+            <div n:if="$conversation->getCreator() && $participant->getId() !== $conversation->getCreator()->getId()">
+                <a class="button" href="{$conversation->getSettingsURL()}/remove-participant/{$participant->getId()}?hash={rawurlencode($csrfToken)}">Удалить</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container_gray" style="padding: 16px; margin-top: 12px;">
+        <form method="POST" action="{$conversation->getSettingsURL()}/add-participants">
+            <input type="hidden" name="hash" value="{$csrfToken}" />
+
+            <div style="margin-bottom: 12px;">
+                <label for="conversation-participants"><strong>Добавить участников по ID</strong></label><br/>
+                <textarea id="conversation-participants" name="participants" rows="3" style="width: 100%;" placeholder="Например: 2, 5, 18" required></textarea>
+                <div class="ovk-hint" style="margin-top: 6px; color: #777;">
+                    Пока что поддерживаются только пользователи. Укажи числовые ID через запятую или пробел.
+                </div>
+            </div>
+
+            <button class="button" type="submit">Добавить участников</button>
+        </form>
+    </div>
 {/block}

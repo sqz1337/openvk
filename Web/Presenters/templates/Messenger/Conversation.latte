@@ -6,7 +6,7 @@
 {$conversation->getTitle()}
 <div style="float: right; max-width: 50%; text-align: right;">
     {if $conversation->canBeModifiedBy($thisUser)}
-        <a class="button" href="{$conversation->getSettingsURL()}">Настройки беседы</a>
+        <a href="{$conversation->getSettingsURL()}" style="font-weight: bold;">Настройки беседы</a>
     {else}
         {$conversation->getPreviewSubtitle($thisUser)}
     {/if}

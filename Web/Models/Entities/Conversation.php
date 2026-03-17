@@ -139,19 +139,54 @@ class Conversation extends RowModel
 
     public function addParticipant(RowModel $participant, bool $isAdmin = false): void
     {
-        if ($this->isParticipant($participant)) {
+        $existing = $this->participants->where([
+            "conversation_id"  => $this->getId(),
+            "participant_type" => get_class($participant),
+            "participant_id"   => $participant->getId(),
+        ])->fetch();
+
+        if (!is_null($existing) && (int) $existing->deleted === 0 && is_null($existing->left_at)) {
+            return;
+        }
+
+        if (!is_null($existing)) {
+            $existing->update([
+                "joined"               => time(),
+                "last_read_message_id" => null,
+                "is_admin"             => (int) $isAdmin,
+                "left_at"              => null,
+                "deleted"              => 0,
+            ]);
             return;
         }
 
         $this->participants->insert([
-            "conversation_id"     => $this->getId(),
-            "participant_type"    => get_class($participant),
-            "participant_id"      => $participant->getId(),
-            "joined"              => time(),
-            "last_read_message_id"=> null,
-            "is_admin"            => (int) $isAdmin,
-            "left_at"             => null,
-            "deleted"             => 0,
+            "conversation_id"      => $this->getId(),
+            "participant_type"     => get_class($participant),
+            "participant_id"       => $participant->getId(),
+            "joined"               => time(),
+            "last_read_message_id" => null,
+            "is_admin"             => (int) $isAdmin,
+            "left_at"              => null,
+            "deleted"              => 0,
+        ]);
+    }
+
+    public function removeParticipant(RowModel $participant): void
+    {
+        if ($this->getCreator()?->getId() === $participant->getId() && get_class($participant) === User::class) {
+            return;
+        }
+
+        $relation = $this->getParticipantRelation($participant);
+        if (is_null($relation)) {
+            return;
+        }
+
+        $relation->update([
+            "left_at"  => time(),
+            "deleted"  => 1,
+            "is_admin" => 0,
         ]);
     }
 
