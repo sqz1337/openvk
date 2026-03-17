@@ -102,7 +102,7 @@ class Correspondence
 
         if ($limit === null) {
             DatabaseConnection::i()->getConnection()->query(
-                "UPDATE messages SET unread = 0 WHERE sender_type = ? AND sender_id = ? AND recipient_type = ? AND recipient_id = ? AND unread = 1",
+                "UPDATE messages SET unread = 0 WHERE sender_type = ? AND sender_id = ? AND recipient_type = ? AND recipient_id = ? AND conversation_id IS NULL AND unread = 1",
                 get_class($target),
                 $target->getId(),
                 get_class($source),
@@ -182,7 +182,7 @@ class Correspondence
         $message->save();
 
         DatabaseConnection::i()->getConnection()->query(
-            "UPDATE messages SET unread = 0 WHERE sender_type = ? AND sender_id = ? AND recipient_type = ? AND recipient_id = ? AND unread = 1",
+            "UPDATE messages SET unread = 0 WHERE sender_type = ? AND sender_id = ? AND recipient_type = ? AND recipient_id = ? AND conversation_id IS NULL AND unread = 1",
             $classes[1],
             $ids[1],
             $classes[0],

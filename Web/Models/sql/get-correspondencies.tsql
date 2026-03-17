@@ -11,6 +11,8 @@ SELECT DISTINCT id, class FROM
     AND
       sender_type = ?
     AND
+      conversation_id IS NULL
+    AND
       deleted = 0
   ) UNION (
     SELECT
@@ -22,6 +24,8 @@ SELECT DISTINCT id, class FROM
       recipient_id = ?
     AND
       recipient_type = ?
+    AND
+      conversation_id IS NULL
     AND
       deleted = 0
   )

@@ -8,6 +8,8 @@ SELECT COUNT(id) AS cnt FROM
       sender_id = ?
     AND
       sender_type = ?
+    AND
+      conversation_id IS NULL
   ) UNION (
     SELECT
       sender_id AS id
@@ -16,5 +18,7 @@ SELECT COUNT(id) AS cnt FROM
       recipient_id = ?
     AND
       recipient_type = ?
+    AND
+      conversation_id IS NULL
   )
 ) dt
