@@ -126,12 +126,35 @@ CREATE TABLE `messages` (
   `sender_id` bigint(20) UNSIGNED NOT NULL,
   `recipient_type` varchar(64) COLLATE utf8mb4_unicode_520_ci NOT NULL,
   `recipient_id` bigint(20) UNSIGNED NOT NULL,
+  `conversation_id` bigint(20) UNSIGNED DEFAULT NULL,
   `content` longtext COLLATE utf8mb4_unicode_520_ci NOT NULL,
   `created` bigint(20) NOT NULL,
   `edited` bigint(20) DEFAULT NULL,
   `ad` tinyint(1) NOT NULL DEFAULT 0,
   `deleted` tinyint(1) NOT NULL DEFAULT 0,
   `unread` tinyint(1) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+
+CREATE TABLE `conversations` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `creator` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(128) COLLATE utf8mb4_unicode_520_ci DEFAULT NULL,
+  `created` bigint(20) UNSIGNED NOT NULL,
+  `updated` bigint(20) UNSIGNED NOT NULL,
+  `last_message_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `deleted` tinyint(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+
+CREATE TABLE `conversation_participants` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `conversation_id` bigint(20) UNSIGNED NOT NULL,
+  `participant_type` varchar(64) COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  `participant_id` bigint(20) UNSIGNED NOT NULL,
+  `joined` bigint(20) UNSIGNED NOT NULL,
+  `last_read_message_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `is_admin` tinyint(1) NOT NULL DEFAULT 0,
+  `left_at` bigint(20) UNSIGNED DEFAULT NULL,
+  `deleted` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
 
 CREATE TABLE `msg_descriptors` (
@@ -357,6 +380,14 @@ ALTER TABLE `likes`
 ALTER TABLE `messages`
   ADD PRIMARY KEY (`id`);
 
+ALTER TABLE `conversations`
+  ADD PRIMARY KEY (`id`);
+
+ALTER TABLE `conversation_participants`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `conversation_member` (`conversation_id`,`participant_type`,`participant_id`,`deleted`),
+  ADD KEY `participant_lookup` (`participant_type`,`participant_id`,`deleted`);
+
 ALTER TABLE `msg_descriptors`
   ADD UNIQUE KEY `index` (`index`);
 
@@ -445,6 +476,12 @@ ALTER TABLE `likes`
 
 ALTER TABLE `messages`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `conversations`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `conversation_participants`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 ALTER TABLE `msg_descriptors`
   MODIFY `index` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
