@@ -58,40 +58,14 @@
         (function setupMessengerIndexRefresh() {
             const list = document.getElementById("messenger-index-list");
 
-            const renderEntries = entries => {
-                if(!list || !Array.isArray(entries)) {
-                    return;
-                }
-
-                list.innerHTML = entries.map(entry => {
-                    const ownAvatar = entry.lastMessage.senderOwn
-                        ? '<div class="crp-entry--message---av"><img src="' + entry.lastMessage.senderAvatar + '" alt="Фотография пользователя" /></div>'
-                        : '';
-
-                    return ''
-                        + '<div class="scroll_node crp-entry" onmousedown="window.location.assign(\'' + entry.url + '\');">'
-                        + '  <div class="crp-entry--image">'
-                        + '    <img src="' + entry.recipient.avatar + '" alt="Фотография пользователя" loading="lazy" />'
-                        + '  </div>'
-                        + '  <div class="crp-entry--info">'
-                        + '    <a href="' + entry.recipient.url + '">' + escapeHtml(entry.recipient.name) + '</a><br/>'
-                        + '    <span>' + escapeHtml(entry.lastMessage.time) + '</span>'
-                        + '  </div>'
-                        + '  <div class="crp-entry--message ' + (entry.lastMessage.unread ? 'unread' : '') + '">'
-                        +       ownAvatar
-                        + '    <div class="crp-entry--message---text">' + entry.lastMessage.text + '</div>'
-                        + '  </div>'
-                        + '</div>';
-                }).join("");
-            };
-
             const refreshList = async () => {
                 if(!list) {
                     return;
                 }
 
                 try {
-                    const resp = await fetch("/im/api/list/1.json?_poll=" + Date.now(), {
+                    const separator = window.location.search.length > 0 ? "&" : "?";
+                    const resp = await fetch(window.location.pathname + window.location.search + separator + "_poll=" + Date.now(), {
                         credentials: "same-origin",
                         cache: "no-store"
                     });
@@ -99,7 +73,14 @@
                         throw new Error("Failed to fetch correspondences: " + resp.status);
                     }
 
-                    renderEntries(await resp.json());
+                    const html = await resp.text();
+                    const doc = new DOMParser().parseFromString(html, "text/html");
+                    const nextList = doc.getElementById("messenger-index-list");
+                    if(!nextList) {
+                        return;
+                    }
+
+                    list.innerHTML = nextList.innerHTML;
                 } catch (error) {
                     console.error("Failed to refresh messenger list", error);
                 }
