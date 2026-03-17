@@ -110,8 +110,10 @@
             }
             
             async _fetchMessages(offset = 0) {
-                let resp = await fetch("/im/api/messages" + {$correspondent->getId()} + "/" + offset + ".json", {
-                    credentials: "same-origin"
+                let url = "/im/api/messages" + {$correspondent->getId()} + "/" + offset + ".json?_poll=" + Date.now();
+                let resp = await fetch(url, {
+                    credentials: "same-origin",
+                    cache: "no-store"
                 });
                 if(!resp.ok) {
                     throw new Error(`Failed to fetch messages: ${resp.status}`);

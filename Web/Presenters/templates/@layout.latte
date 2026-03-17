@@ -186,7 +186,7 @@
                             <a n:if="$thisUser->getLeftMenuItemStatus('audios')" href="/audios{$thisUser->getId()}" class="link">{_my_audios}</a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('messages')" href="/im" class="link">{_my_messages}
                                 <object type="internal/link" n:if="$thisUser->getUnreadMessagesCount() > 0">
-                                    (<b>{$thisUser->getUnreadMessagesCount()}</b>)
+                                    (<b id="layout-unread-messages">{$thisUser->getUnreadMessagesCount()}</b>)
                                 </object>
                             </a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('notes')" href="/notes{$thisUser->getId()}" class="link">{_my_notes}</a>
@@ -304,7 +304,7 @@
                                 <a id="minilink-messenger" class="minilink" href="/im">
                                     <object type="internal/link" n:if="$thisUser->getUnreadMessagesCount() > 0">
                                         <div class="counter">
-                                            +{$thisUser->getUnreadMessagesCount()}
+                                            +<span id="layout-unread-messages-mini">{$thisUser->getUnreadMessagesCount()}</span>
                                         </div>
                                     </object>
                                     <img src="/assets/packages/static/openvk/img/messages.svg">
@@ -445,6 +445,48 @@
         {css "js/node_modules/leaflet-control-geocoder/dist/Control.Geocoder.css"}
 
         <script>bsdnHydrate();</script>
+
+        {ifset $thisUser}
+            <script>
+                (function setupMessageCounterPolling() {
+                    const fullCounter = document.getElementById("layout-unread-messages");
+                    const miniCounter = document.getElementById("layout-unread-messages-mini");
+
+                    if(!fullCounter && !miniCounter) {
+                        return;
+                    }
+
+                    const updateCounters = count => {
+                        if(fullCounter) {
+                            fullCounter.textContent = count;
+                            const wrapper = fullCounter.closest("object");
+                            if(wrapper) {
+                                wrapper.style.display = count > 0 ? "" : "none";
+                            }
+                        }
+
+                        if(miniCounter) {
+                            miniCounter.textContent = count;
+                            const wrapper = miniCounter.closest("object");
+                            if(wrapper) {
+                                wrapper.style.display = count > 0 ? "" : "none";
+                            }
+                        }
+                    };
+
+                    const pollCounters = async () => {
+                        try {
+                            const counters = await window.OVKAPI.call("account.getCounters", {});
+                            updateCounters(counters.messages ?? 0);
+                        } catch (error) {
+                            console.error("Failed to poll message counters", error);
+                        }
+                    };
+
+                    window.setInterval(pollCounters, 5000);
+                })();
+            </script>
+        {/ifset}
 
         <script n:if="\OPENVK_ROOT_CONF['openvk']['telemetry']['plausible']['enable']" async defer data-domain="{php echo \OPENVK_ROOT_CONF['openvk']['telemetry']['plausible']['domain']}" src="{php echo OPENVK_ROOT_CONF['openvk']['telemetry']['plausible']['server']}js/plausible.js"></script>
 
