@@ -16,13 +16,9 @@ class Conversation extends RowModel
 {
     protected $tableName = "conversations";
 
-    private $participants;
-
     public function __construct(?ActiveRow $ar = null)
     {
         parent::__construct($ar);
-
-        $this->participants = DatabaseConnection::i()->getContext()->table("conversation_participants");
     }
 
     public function getTitle(): string
@@ -84,7 +80,7 @@ class Conversation extends RowModel
 
     private function getParticipantRelation(RowModel $participant): ?ActiveRow
     {
-        return $this->participants->where([
+        return DatabaseConnection::i()->getContext()->table("conversation_participants")->where([
             "conversation_id"  => $this->getId(),
             "participant_type" => get_class($participant),
             "participant_id"   => $participant->getId(),
@@ -94,7 +90,8 @@ class Conversation extends RowModel
 
     public function getParticipants(bool $activeOnly = true): array
     {
-        $selection = $this->participants->where("conversation_id", $this->getId());
+        $selection = DatabaseConnection::i()->getContext()->table("conversation_participants")
+            ->where("conversation_id", $this->getId());
         if ($activeOnly) {
             $selection = $selection->where("deleted", 0)->where("left_at IS NULL");
         }
@@ -125,7 +122,8 @@ class Conversation extends RowModel
 
     public function getParticipantCount(bool $activeOnly = true): int
     {
-        $selection = $this->participants->where("conversation_id", $this->getId());
+        $selection = DatabaseConnection::i()->getContext()->table("conversation_participants")
+            ->where("conversation_id", $this->getId());
         if ($activeOnly) {
             $selection = $selection->where("deleted", 0)->where("left_at IS NULL");
         }
@@ -140,7 +138,8 @@ class Conversation extends RowModel
 
     public function addParticipant(RowModel $participant, bool $isAdmin = false): void
     {
-        $existing = $this->participants->where([
+        $participants = DatabaseConnection::i()->getContext()->table("conversation_participants");
+        $existing = $participants->where([
             "conversation_id"  => $this->getId(),
             "participant_type" => get_class($participant),
             "participant_id"   => $participant->getId(),
@@ -161,7 +160,7 @@ class Conversation extends RowModel
             return;
         }
 
-        $this->participants->insert([
+        $participants->insert([
             "conversation_id"      => $this->getId(),
             "participant_type"     => get_class($participant),
             "participant_id"       => $participant->getId(),
