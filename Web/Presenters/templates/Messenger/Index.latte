@@ -33,7 +33,6 @@
                 </div>
                 <div class="crp-entry--info">
                     <a href="{$conversation->getURL()}">{$conversation->getTitle()}</a><br/>
-                    <span>{$conversation->getPreviewSubtitle($thisUser)}</span><br/>
                     <span>{if $lastMsg}{$lastMsg->getSendTimeHumanized()}{else}{$conversation->getCreatedTime()}{/if}</span>
                 </div>
                 <div n:class="crp-entry--message, $conversation->getUnreadStateFor($thisUser) ? unread">
