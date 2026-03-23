@@ -7,7 +7,7 @@ namespace openvk\Web\Presenters;
 use openvk\Web\Models\Exceptions\TooMuchOptionsException;
 use openvk\Web\Models\Entities\{Poll, Post, Photo, Video, Club, User};
 use openvk\Web\Models\Entities\Notifications\{MentionNotification, RepostNotification, WallPostNotification, PostAcceptedNotification, NewSuggestedPostsNotification};
-use openvk\Web\Models\Repositories\{Posts, Users, Clubs, Albums, Notes, Videos, Comments, Photos, Audios};
+use openvk\Web\Models\Repositories\{Posts, Users, Clubs, Albums, Notes, Videos, Comments, Photos, Audios, TelegramNews};
 use Chandler\Database\DatabaseConnection;
 use Nette\InvalidStateException as ISE;
 use Bhaktaraz\RSSGenerator\Item;
@@ -255,6 +255,29 @@ final class WallPresenter extends OpenVKPresenter
         foreach ($posts as $post) {
             $this->template->posts[] = $this->posts->get($post->id);
         }
+    }
+
+    public function renderTelegramNewsFeed(): void
+    {
+        $this->assertUserLoggedIn();
+
+        $page      = (int) ($_GET["p"] ?? 1);
+        $perPage   = min((int) ($_GET["posts"] ?? OPENVK_DEFAULT_PER_PAGE), 50);
+        $newsRepo  = new TelegramNews();
+        $feedItems = $newsRepo->getFeedPage($page, $perPage);
+        $count     = $newsRepo->getFeedCount();
+
+        $this->template->_template        = "Wall/Feed.latte";
+        $this->template->telegramNewsFeed = true;
+        $this->template->newsItems        = $feedItems;
+        $this->template->paginatorConf    = (object) [
+            "count"   => $count,
+            "page"    => $page,
+            "amount"  => sizeof($feedItems),
+            "perPage" => $perPage,
+            "tidy"    => false,
+            "atTop"   => false,
+        ];
     }
 
     public function renderHashtagFeed($hashtag): void

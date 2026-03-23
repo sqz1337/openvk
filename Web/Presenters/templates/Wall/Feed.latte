@@ -6,24 +6,32 @@
 {/block}
 
 {block content}
+    {var $isGlobalFeed = isset($globalFeed)}
+    {var $isTelegramNewsFeed = isset($telegramNewsFeed)}
 
     <div class="tabs">
-        <div n:attr="id => (isset($globalFeed) ? 'ki' : 'activetabs')" class="tab">
-            <a n:attr="id => (isset($globalFeed) ? 'ki' : 'act_tab_a')" href="/feed">{_my_news}</a>
+        <div n:attr="id => (!$isGlobalFeed && !$isTelegramNewsFeed ? 'activetabs' : 'ki')" class="tab">
+            <a n:attr="id => (!$isGlobalFeed && !$isTelegramNewsFeed ? 'act_tab_a' : 'ki')" href="/feed">{_my_news}</a>
         </div>
-        <div n:attr="id => (isset($globalFeed) ? 'activetabs' : 'ki')" class="tab">
-            <a n:attr="id => (isset($globalFeed) ? 'act_tab_a' : 'ki')" href="/feed/all">{_all_news}</a>
+        <div n:attr="id => ($isGlobalFeed ? 'activetabs' : 'ki')" class="tab">
+            <a n:attr="id => ($isGlobalFeed ? 'act_tab_a' : 'ki')" href="/feed/all">{_all_news}</a>
+        </div>
+        <div n:attr="id => ($isTelegramNewsFeed ? 'activetabs' : 'ki')" class="tab">
+            <a n:attr="id => ($isTelegramNewsFeed ? 'act_tab_a' : 'ki')" href="/feed/global-news">{_global_news}</a>
         </div>
 
-        <a href='#' id="__feed_settings_link" class="side_link" data-pagescount='{ceil($paginatorConf->count / $paginatorConf->perPage)}'>{_feed_settings}</a>
+        <a n:if="!$isTelegramNewsFeed" href='#' id="__feed_settings_link" class="side_link" data-pagescount='{ceil($paginatorConf->count / $paginatorConf->perPage)}'>{_feed_settings}</a>
     </div>
 
-    <div n:class="postFeedWrapper, $thisUser->hasMicroblogEnabled() ? postFeedWrapperMicroblog">
+    <div n:if="!$isTelegramNewsFeed" n:class="postFeedWrapper, $thisUser->hasMicroblogEnabled() ? postFeedWrapperMicroblog">
         {include "../components/textArea.latte", route => "/wall" . $thisUser->getId() . "/makePost", graffiti => true, polls => true, notes => true, hasSource => true, geo => true}
     </div>
-    
+
     <div class='scroll_container'>
-        <div class='scroll_node' n:foreach='$posts as $post' data-uniqueid="{$post->getPrettyId()}">
+        <div n:if="$isTelegramNewsFeed" class='scroll_node' n:foreach='$newsItems as $item' data-uniqueid="tg-news-{$item->id}">
+            {include "../components/tgNewsItem.latte", item => $item}
+        </div>
+        <div n:if="!$isTelegramNewsFeed" class='scroll_node' n:foreach='$posts as $post' data-uniqueid="{$post->getPrettyId()}">
             <a name="postGarter={$post->getId()}"></a>
             {include "../components/post.latte", post => $post, onWallOf => true, commentSection => true, bigWall => true}
         </div>

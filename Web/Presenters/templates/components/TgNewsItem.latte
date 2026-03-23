@@ -1,0 +1,37 @@
+{var $avatarUrl = empty($item->source_avatar_url) ? '/assets/packages/static/openvk/img/header_yellow.png' : $item->source_avatar_url}
+
+<table border="0" style="font-size: 11px;" class="post tg-news-item">
+    <tbody>
+        <tr>
+            <td class="post-author-ava" width="54" valign="top">
+                <a href="{$item->original_url}" target="_blank" rel="noopener">
+                    <img src="{$avatarUrl}" class="post-avatar" width="50" loading="lazy" />
+                </a>
+            </td>
+            <td width="100%" valign="top">
+                <div class="post-author">
+                    <a href="https://t.me/{$item->telegram_handle}" target="_blank" rel="noopener">
+                        <b class="post-author-name">{$item->source_title}</b>
+                    </a>
+                    <br />
+                    <a href="{$item->original_url}" target="_blank" rel="noopener" class="date">
+                        {date("d.m.y H:i", strtotime($item->published_at))}
+                    </a>
+                </div>
+                <div class="post-content">
+                    <div class="text">
+                        <span class="really_text" style="white-space: pre-line;">{$item->text}</span>
+                    </div>
+                    <div n:if="$item->image_url" style="margin-top: 10px;">
+                        <a href="{$item->original_url}" target="_blank" rel="noopener">
+                            <img src="{$item->image_url}" style="max-width: 100%; border-radius: 3px;" loading="lazy" />
+                        </a>
+                    </div>
+                </div>
+                <div class="post-menu">
+                    <a href="{$item->original_url}" target="_blank" rel="noopener">Открыть в Telegram</a>
+                </div>
+            </td>
+        </tr>
+    </tbody>
+</table>
