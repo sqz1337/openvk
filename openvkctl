@@ -9,12 +9,16 @@ use Symfony\Component\Console\Application;
 
 require(__DIR__ . "/chandler_loader.php");
 require_once(__DIR__ . "/CLI/FetchTelegramNewsCommand.php");
+require_once(__DIR__ . "/CLI/RegisterAIBotCommand.php");
+require_once(__DIR__ . "/CLI/RunAIBotCommand.php");
 
 $application = new Application();
 $application->add(new CLI\UpgradeCommand());
 $application->add(new CLI\RebuildImagesCommand());
 $application->add(new CLI\FetchToncoinTransactions());
 $application->add(new CLI\FetchTelegramNewsCommand());
+$application->add(new CLI\RegisterAIBotCommand());
+$application->add(new CLI\RunAIBotCommand());
 $application->add(new CLI\CleanupPendingUploadsCommand());
 
 $application->run();

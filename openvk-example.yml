@@ -160,6 +160,11 @@ openvk:
             enable: false
             token: "TOKEN_HERE"
             helpdeskChat: ""
+        deepseek:
+            enable: false
+            apiKey: ""
+            baseUrl: "https://api.deepseek.com"
+            model: "deepseek-chat"
         eventDB:
             enable: true
             database:
@@ -172,3 +177,11 @@ openvk:
                 addr: "127.0.0.1"
                 port: 9092
                 topic: "OvkEvents"
+    aiBots:
+        enable: false
+        lookbackMinutes: 30
+        maxDirectMessages: 5
+        maxPosts: 5
+        maxComments: 5
+        responseMaxLength: 280
+        postMaxLength: 600
