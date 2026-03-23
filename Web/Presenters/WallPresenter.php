@@ -201,6 +201,7 @@ final class WallPresenter extends OpenVKPresenter
                    ->where("deleted", 0)
                    ->where("suggested", 0)
                    ->order("created DESC");
+        $this->template->newsItems = [];
         $this->template->paginatorConf = (object) [
             "count"   => sizeof($posts),
             "page"    => (int) ($_GET["p"] ?? 1),
@@ -244,6 +245,7 @@ final class WallPresenter extends OpenVKPresenter
 
         $this->template->_template     = "Wall/Feed.latte";
         $this->template->globalFeed    = true;
+        $this->template->newsItems     = [];
         $this->template->paginatorConf = (object) [
             "count"   => $count,
             "page"    => (int) ($_GET["p"] ?? 1),
@@ -269,6 +271,7 @@ final class WallPresenter extends OpenVKPresenter
 
         $this->template->_template        = "Wall/Feed.latte";
         $this->template->telegramNewsFeed = true;
+        $this->template->posts            = [];
         $this->template->newsItems        = $feedItems;
         $this->template->paginatorConf    = (object) [
             "count"   => $count,
