@@ -31,7 +31,7 @@
 
     <div class='scroll_container'>
         <div n:if="$isTelegramNewsFeed" class='scroll_node' n:foreach='$feedNewsItems as $item' data-uniqueid="tg-news-{$item->id}">
-            {include "../components/tgNewsItem.latte", item => $item}
+            {include "../components/TgNewsItem.latte", item => $item}
         </div>
         <div n:if="!$isTelegramNewsFeed" class='scroll_node' n:foreach='$feedPosts as $post' data-uniqueid="{$post->getPrettyId()}">
             <a name="postGarter={$post->getId()}"></a>
