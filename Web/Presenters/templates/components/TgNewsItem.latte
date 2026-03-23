@@ -15,7 +15,7 @@
                     </a>
                     <br />
                     <a href="{$item->original_url}" target="_blank" rel="noopener" class="date">
-                        {date("d.m.y H:i", strtotime($item->published_at))}
+                        {$item->published_at|date:"d.m.y H:i"}
                     </a>
                 </div>
                 <div class="post-content">
