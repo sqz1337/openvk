@@ -38,7 +38,9 @@ final class AIBotRunner
             ];
         }
 
-        $this->bots->touchRun((int) $bot->id);
+        if (!$dryRun) {
+            $this->bots->touchRun((int) $bot->id);
+        }
 
         $user = $this->users->get((int) $bot->user_id);
         if (!$user) {
@@ -46,49 +48,99 @@ final class AIBotRunner
             throw new \RuntimeException("Bot user not found");
         }
 
-        $context   = $this->buildContext($user);
-        $decision  = $this->decide($bot, $user, $context);
-        $validated = $this->validateDecision($decision, $context);
+        $conf              = OPENVK_ROOT_CONF["openvk"]["aiBots"] ?? [];
+        $memoryMinutes     = max(1, (int) ($conf["actionMemoryMinutes"] ?? 30));
+        $maxActionsPerRun  = max(1, min(3, (int) ($conf["maxActionsPerRun"] ?? 3)));
+        $recentActions     = $this->bots->getRecentActions((int) $bot->id, $memoryMinutes);
+        $runBlockedTargets = [];
+        $actions           = [];
 
-        if ($dryRun) {
-            $this->bots->logAction((int) $bot->id, (string) $validated["action"], "dry_run", $validated, ["context" => $context]);
+        for ($i = 0; $i < $maxActionsPerRun; $i++) {
+            $context   = $this->buildContext($user, $recentActions, $runBlockedTargets);
+            $decision  = $this->decide($bot, $user, $context);
+            $validated = $this->validateDecision($decision, $context);
 
-            return [
-                "status"   => "dry_run",
-                "bot"      => $bot->name,
+            if ($validated["action"] === "do_nothing") {
+                if ($dryRun && sizeof($actions) === 0) {
+                    return [
+                        "status"   => "dry_run",
+                        "bot"      => $bot->name,
+                        "decision" => $validated,
+                    ];
+                }
+
+                break;
+            }
+
+            if ($dryRun) {
+                $actions[] = $validated;
+                $this->rememberRunTarget($runBlockedTargets, $validated);
+                continue;
+            }
+
+            $result = $this->executeDecision($user, $validated, $context);
+            $this->bots->logAction((int) $bot->id, (string) $validated["action"], (string) ($result["status"] ?? "unknown"), $validated, $result);
+
+            if (($result["status"] ?? "") !== "success") {
+                $actions[] = [
+                    "decision" => $validated,
+                    "result"   => $result,
+                ];
+                break;
+            }
+
+            $this->bots->touchAction((int) $bot->id);
+            $recentActions[] = [
+                "action"  => (string) $validated["action"],
+                "payload" => $validated,
+                "result"  => $result,
+            ];
+            $this->rememberRunTarget($runBlockedTargets, $validated);
+            $actions[] = [
                 "decision" => $validated,
+                "result"   => $result,
             ];
         }
 
-        $result = $this->executeDecision($user, $validated, $context);
-        if (($result["status"] ?? "") === "success" && ($validated["action"] ?? "do_nothing") !== "do_nothing") {
-            $this->bots->touchAction((int) $bot->id);
+        if ($dryRun) {
+            return [
+                "status"    => "dry_run",
+                "bot"       => $bot->name,
+                "decisions" => $actions,
+            ];
         }
 
-        $this->bots->logAction((int) $bot->id, (string) $validated["action"], (string) ($result["status"] ?? "unknown"), $validated, $result);
+        if (sizeof($actions) === 0) {
+            return [
+                "status"  => "success",
+                "bot"     => $bot->name,
+                "message" => "Bot chose to do nothing",
+                "actions" => [],
+            ];
+        }
 
         return [
-            "status"   => $result["status"] ?? "unknown",
-            "bot"      => $bot->name,
-            "decision" => $validated,
-            "result"   => $result,
+            "status"  => "success",
+            "bot"     => $bot->name,
+            "actions" => $actions,
         ];
     }
 
-    private function buildContext(User $bot): array
+    private function buildContext(User $bot, array $recentActions = [], array $runBlockedTargets = []): array
     {
         $conf            = OPENVK_ROOT_CONF["openvk"]["aiBots"] ?? [];
         $lookbackSeconds = max(5, (int) ($conf["lookbackMinutes"] ?? 30)) * 60;
         $since           = time() - $lookbackSeconds;
+        $blocked         = $this->buildBlockedTargets($recentActions, $runBlockedTargets);
 
         return [
-            "direct_messages" => $this->collectDirectMessages($bot, $since, max(1, (int) ($conf["maxDirectMessages"] ?? 5))),
-            "recent_posts"    => $this->collectRecentPosts($bot, $since, max(1, (int) ($conf["maxPosts"] ?? 5))),
+            "direct_messages" => $this->collectDirectMessages($bot, $since, max(1, (int) ($conf["maxDirectMessages"] ?? 5)), $blocked["messages"]),
+            "recent_posts"    => $this->collectRecentPosts($bot, $since, max(1, (int) ($conf["maxPosts"] ?? 5)), $blocked["posts"]),
             "recent_comments" => $this->collectRecentComments($bot, $since, max(1, (int) ($conf["maxComments"] ?? 5))),
         ];
     }
 
-    private function collectDirectMessages(User $bot, int $since, int $limit): array
+    private function collectDirectMessages(User $bot, int $since, int $limit, array $blockedMessageIds = []): array
     {
         $rows = DatabaseConnection::i()->getContext()
             ->table("messages")
@@ -96,6 +148,7 @@ final class AIBotRunner
             ->where("recipient_id", $bot->getId())
             ->where("conversation_id IS NULL")
             ->where("deleted", 0)
+            ->where("unread", 1)
             ->where("created >= ?", $since)
             ->order("created DESC")
             ->limit($limit);
@@ -105,6 +158,10 @@ final class AIBotRunner
             $msg = new Message($row);
             $sender = $msg->getSender();
             if (!$sender || $sender->isDeleted()) {
+                continue;
+            }
+
+            if (in_array($msg->getId(), $blockedMessageIds, true)) {
                 continue;
             }
 
@@ -121,7 +178,7 @@ final class AIBotRunner
         return $items;
     }
 
-    private function collectRecentPosts(User $bot, int $since, int $limit): array
+    private function collectRecentPosts(User $bot, int $since, int $limit, array $blockedPostIds = []): array
     {
         $rows = DatabaseConnection::i()->getContext()
             ->table("posts")
@@ -136,6 +193,10 @@ final class AIBotRunner
         foreach ($rows as $row) {
             $post = new Post($row);
             if ($post->getOwner(false)->isDeleted() || !$post->canBeViewedBy($bot)) {
+                continue;
+            }
+
+            if (in_array($post->getId(), $blockedPostIds, true)) {
                 continue;
             }
 
@@ -191,7 +252,7 @@ final class AIBotRunner
         $messages = [
             [
                 "role"    => "system",
-                "content" => "You control a social media bot inside OpenVK. Choose at most one action. Always return strict JSON only. Allowed actions: do_nothing, reply_to_message, like_post, comment_post, create_post. Prefer replying to direct messages. Do not mention being an AI. Keep tone natural and short. If context is weak, choose do_nothing.",
+                "content" => "You control a social media bot inside OpenVK. Choose at most one action for the current step. Always return strict JSON only. Allowed actions: do_nothing, reply_to_message, like_post, comment_post, create_post. Prefer replying to unread direct messages first. Do not repeat the same target if it is not present in context. Do not mention being an AI. Keep tone natural and short. If context is weak, choose do_nothing.",
             ],
             [
                 "role"    => "user",
@@ -292,6 +353,10 @@ final class AIBotRunner
             return ["status" => "failed", "error" => "Unable to send reply"];
         }
 
+        $row->update([
+            "unread" => 0,
+        ]);
+
         return ["status" => "success", "message" => "Reply sent", "message_id" => $saved->getId()];
     }
 
@@ -356,5 +421,46 @@ final class AIBotRunner
         }
 
         return rtrim(mb_substr($text, 0, max(1, $maxLength - 3))) . "...";
+    }
+
+    private function buildBlockedTargets(array $recentActions, array $runBlockedTargets): array
+    {
+        $blockedMessages = [];
+        $blockedPosts    = [];
+
+        foreach ($recentActions as $action) {
+            $name    = (string) ($action["action"] ?? "");
+            $payload = $action["payload"] ?? [];
+            $target  = (int) ($payload["target_id"] ?? 0);
+
+            if ($name === "reply_to_message" && $target > 0) {
+                $blockedMessages[] = $target;
+            }
+
+            if (in_array($name, ["like_post", "comment_post"], true) && $target > 0) {
+                $blockedPosts[] = $target;
+            }
+        }
+
+        return [
+            "messages" => array_values(array_unique(array_merge($blockedMessages, $runBlockedTargets["messages"] ?? []))),
+            "posts"    => array_values(array_unique(array_merge($blockedPosts, $runBlockedTargets["posts"] ?? []))),
+        ];
+    }
+
+    private function rememberRunTarget(array &$runBlockedTargets, array $decision): void
+    {
+        $action   = (string) ($decision["action"] ?? "");
+        $targetId = (int) ($decision["target_id"] ?? 0);
+
+        if ($action === "reply_to_message" && $targetId > 0) {
+            $runBlockedTargets["messages"] ??= [];
+            $runBlockedTargets["messages"][] = $targetId;
+        }
+
+        if (in_array($action, ["like_post", "comment_post"], true) && $targetId > 0) {
+            $runBlockedTargets["posts"] ??= [];
+            $runBlockedTargets["posts"][] = $targetId;
+        }
     }
 }

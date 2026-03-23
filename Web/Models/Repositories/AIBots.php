@@ -120,4 +120,24 @@ final class AIBots
             "created_at"   => date("Y-m-d H:i:s"),
         ]);
     }
+
+    public function getRecentActions(int $botId, int $minutes = 30): array
+    {
+        $since = date("Y-m-d H:i:s", time() - max(1, $minutes) * 60);
+        $rows  = DatabaseConnection::i()->getContext()
+            ->table("ai_bot_action_logs")
+            ->where("bot_id", $botId)
+            ->where("status", "success")
+            ->where("created_at >= ?", $since)
+            ->order("id DESC")
+            ->fetchAll();
+
+        return array_map(static function (ActiveRow $row): array {
+            return [
+                "action"  => (string) $row->action,
+                "payload" => json_decode((string) ($row->payload_json ?? "{}"), true) ?: [],
+                "result"  => json_decode((string) ($row->result_json ?? "{}"), true) ?: [],
+            ];
+        }, $rows);
+    }
 }

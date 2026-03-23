@@ -180,6 +180,8 @@ openvk:
     aiBots:
         enable: false
         lookbackMinutes: 30
+        actionMemoryMinutes: 30
+        maxActionsPerRun: 3
         maxDirectMessages: 5
         maxPosts: 5
         maxComments: 5
