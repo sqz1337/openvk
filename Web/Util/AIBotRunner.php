@@ -141,6 +141,7 @@ final class AIBotRunner
             "unread_conversations" => $this->collectUnreadConversations($bot, max(1, (int) ($conf["maxDirectMessages"] ?? 5)), $blocked["conversations"]),
             "recent_posts"    => $this->collectRecentPosts($bot, $since, max(1, (int) ($conf["maxPosts"] ?? 5)), $blocked["posts"]),
             "recent_comments" => $this->collectRecentComments($bot, $since, max(1, (int) ($conf["maxComments"] ?? 5)), $blocked["comments"]),
+            "recent_bot_actions" => $this->summarizeRecentActions($recentActions, 5),
         ];
     }
 
@@ -176,6 +177,7 @@ final class AIBotRunner
                 "text"        => $this->trimText($msg->getText(), 240),
                 "created"     => $msg->getSendTimeHumanized(),
                 "unread"      => $msg->isUnread(),
+                "thread"      => $this->collectDirectThread($bot, $sender, 6),
             ];
         }
 
@@ -228,6 +230,7 @@ final class AIBotRunner
                 "last_sender_name" => $sender?->getCanonicalName(),
                 "last_text"        => $this->trimText($lastMessage->getText(), 240),
                 "created"          => $lastMessage->getSendTimeHumanized(),
+                "thread"           => $this->collectConversationThread($conversation, 8),
             ];
         }
 
@@ -307,6 +310,56 @@ final class AIBotRunner
         return $items;
     }
 
+    private function collectDirectThread(User $bot, User $sender, int $limit): array
+    {
+        $correspondence = new \openvk\Web\Models\Entities\Correspondence($bot, $sender);
+        $messages = $correspondence->getMessages(1, null, $limit, 0, true);
+
+        return array_map(function (Message $message) use ($bot): array {
+            $author = $message->getSender();
+
+            return [
+                "id"      => $message->getId(),
+                "author"  => $author?->getId() === $bot->getId() ? "bot" : ($author?->getCanonicalName() ?? "unknown"),
+                "text"    => $this->trimText($message->getText(), 220),
+                "created" => $message->getSendTimeHumanized(),
+            ];
+        }, $messages);
+    }
+
+    private function collectConversationThread(Conversation $conversation, int $limit): array
+    {
+        $messages = $conversation->getMessages(1, null, $limit, 0, true);
+
+        return array_map(function (Message $message): array {
+            $author = $message->getSender();
+
+            return [
+                "id"      => $message->getId(),
+                "author"  => $author?->getCanonicalName() ?? "unknown",
+                "text"    => $this->trimText($message->getText(), 220),
+                "created" => $message->getSendTimeHumanized(),
+            ];
+        }, $messages);
+    }
+
+    private function summarizeRecentActions(array $recentActions, int $limit = 5): array
+    {
+        $recentActions = array_slice($recentActions, 0, max(1, $limit));
+
+        return array_map(static function (array $action): array {
+            $payload = $action["payload"] ?? [];
+            $result  = $action["result"] ?? [];
+
+            return [
+                "action"    => (string) ($action["action"] ?? ""),
+                "target_id" => (int) ($payload["target_id"] ?? 0),
+                "reason"    => (string) ($payload["reason"] ?? ""),
+                "status"    => (string) ($result["status"] ?? "unknown"),
+            ];
+        }, $recentActions);
+    }
+
     private function decide(ActiveRow $botRow, User $bot, array $context, bool $forceAction = false): array
     {
         $client = new DeepSeekClient();
@@ -316,7 +369,7 @@ final class AIBotRunner
         $messages = [
             [
                 "role"    => "system",
-                "content" => "You control a social media bot inside OpenVK. {$forceInstruction} Always return strict JSON only. Allowed actions: do_nothing, reply_to_message, reply_to_conversation, like_post, like_comment, comment_post, create_post. Prefer replying to unread direct messages first, then unread conversations. If there are fresh posts or comments and no messages need replies, usually choose like_post, like_comment, comment_post, or create_post instead of do_nothing. Do not repeat the same target if it is not present in context. Do not mention being an AI. Keep tone natural and short.",
+                "content" => "You control a social media bot inside OpenVK. {$forceInstruction} Always return strict JSON only. Allowed actions: do_nothing, reply_to_message, reply_to_conversation, like_post, like_comment, comment_post, create_post. Prefer replying to unread direct messages first, then unread conversations. Use the provided thread history to avoid awkward repeated greetings and to stay coherent. Use recent_bot_actions to avoid repetitive behavior. If there are fresh posts or comments and no messages need replies, usually choose like_post, like_comment, comment_post, or create_post instead of do_nothing. Do not repeat the same target if it is not present in context. Do not mention being an AI. Keep tone natural and short.",
             ],
             [
                 "role"    => "user",
