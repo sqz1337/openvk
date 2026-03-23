@@ -6,24 +6,90 @@
 {/block}
 
 {block content}
+    {var $isGlobalFeed = isset($globalFeed)}
+    {var $isTelegramNewsFeed = isset($telegramNewsFeed)}
+    {var $feedPosts = $posts ?? []}
+    {var $feedNewsItems = $newsItems ?? []}
+    {var $selectedSources = $selectedSourceIds ?? []}
+    {var $sources = $telegramNewsSources ?? []}
+    {var $canManageTelegramNews = $canManageTelegramNews ?? false}
+    {var $filterApplied = $telegramNewsFilterApplied ?? false}
 
     <div class="tabs">
-        <div n:attr="id => (isset($globalFeed) ? 'ki' : 'activetabs')" class="tab">
-            <a n:attr="id => (isset($globalFeed) ? 'ki' : 'act_tab_a')" href="/feed">{_my_news}</a>
+        <div n:attr="id => (!$isGlobalFeed && !$isTelegramNewsFeed ? 'activetabs' : 'ki')" class="tab">
+            <a n:attr="id => (!$isGlobalFeed && !$isTelegramNewsFeed ? 'act_tab_a' : 'ki')" href="/feed">{_my_news}</a>
         </div>
-        <div n:attr="id => (isset($globalFeed) ? 'activetabs' : 'ki')" class="tab">
-            <a n:attr="id => (isset($globalFeed) ? 'act_tab_a' : 'ki')" href="/feed/all">{_all_news}</a>
+        <div n:attr="id => ($isGlobalFeed ? 'activetabs' : 'ki')" class="tab">
+            <a n:attr="id => ($isGlobalFeed ? 'act_tab_a' : 'ki')" href="/feed/all">{_all_news}</a>
+        </div>
+        <div n:attr="id => ($isTelegramNewsFeed ? 'activetabs' : 'ki')" class="tab">
+            <a n:attr="id => ($isTelegramNewsFeed ? 'act_tab_a' : 'ki')" href="/feed/global-news">{_global_news}</a>
         </div>
 
-        <a href='#' id="__feed_settings_link" class="side_link" data-pagescount='{ceil($paginatorConf->count / $paginatorConf->perPage)}'>{_feed_settings}</a>
+        <a n:if="$isTelegramNewsFeed" href="#" id="__telegram_news_manage_link" class="side_link">Управление</a>
+        <a n:if="!$isTelegramNewsFeed" href='#' id="__feed_settings_link" class="side_link" data-pagescount='{ceil($paginatorConf->count / $paginatorConf->perPage)}'>{_feed_settings}</a>
     </div>
 
-    <div n:class="postFeedWrapper, $thisUser->hasMicroblogEnabled() ? postFeedWrapperMicroblog">
+    <div n:if="!$isTelegramNewsFeed" n:class="postFeedWrapper, $thisUser->hasMicroblogEnabled() ? postFeedWrapperMicroblog">
         {include "../components/textArea.latte", route => "/wall" . $thisUser->getId() . "/makePost", graffiti => true, polls => true, notes => true, hasSource => true, geo => true}
     </div>
-    
-    <div class='scroll_container'>
-        <div class='scroll_node' n:foreach='$posts as $post' data-uniqueid="{$post->getPrettyId()}">
+
+    <div n:if="$isTelegramNewsFeed" style="position: relative;">
+        <div id="telegram_news_sidebar" style="display: none; position: absolute; top: 0; right: 0; width: 290px; z-index: 20; background: #fff; border: 1px solid #c9d8e6; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14); padding: 12px; box-sizing: border-box;">
+            <div class="content_subtitle">
+                {_telegram_news_sources}
+            </div>
+            <div style="padding: 10px 0 0 0;">
+                <form method="GET" action="/feed/global-news">
+                    <input type="hidden" name="filter_applied" value="1" />
+                    <div n:if="sizeof($sources) === 0" style="color: gray; margin-bottom: 10px;">{_telegram_news_sources_empty}</div>
+                    <label n:foreach="$sources as $source" style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; line-height: 1.25;">
+                        <input type="checkbox" name="sources[]" value="{$source->id}" n:attr="checked => in_array((int) $source->id, $selectedSources, true)" style="margin-top: 2px;" />
+                        <span>{$source->title}</span>
+                    </label>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <input class="button" type="submit" value="{_apply}" />
+                        <a class="button secondary" href="/feed/global-news">{_reset}</a>
+                    </div>
+                </form>
+            </div>
+
+            <div n:if="$canManageTelegramNews" class="content_subtitle" style="margin-top: 14px;">
+                {_telegram_news_manage}
+            </div>
+            <div n:if="$canManageTelegramNews" style="padding-top: 10px;">
+                <form method="POST" style="margin-bottom: 12px;">
+                    <input type="hidden" name="hash" value="{$csrfToken}" />
+                    <input type="hidden" name="action" value="refresh_news" />
+                    <input class="button" type="submit" value="{_telegram_news_refresh_now}" />
+                </form>
+
+                <form method="POST">
+                    <input type="hidden" name="action" value="add_source" />
+                    <div style="margin-bottom: 10px;">
+                        <label for="tg_news_title" style="display: block; margin-bottom: 4px;"><b>{_name}</b></label>
+                        <input id="tg_news_title" class="text" style="display: block; width: 100%; box-sizing: border-box;" type="text" name="title" maxlength="191" />
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <label for="tg_news_handle" style="display: block; margin-bottom: 4px;"><b>Telegram</b></label>
+                        <input id="tg_news_handle" class="text" style="display: block; width: 100%; box-sizing: border-box;" type="text" name="telegram_handle" placeholder="@channel or t.me/channel" maxlength="64" />
+                    </div>
+                    <input type="hidden" name="hash" value="{$csrfToken}" />
+                    <input class="button" type="submit" value="{_add}" />
+                </form>
+            </div>
+        </div>
+
+        <div style="min-width: 0;">
+            <div class='scroll_container'>
+                <div class='scroll_node' n:foreach='$feedNewsItems as $item' data-uniqueid="tg-news-{$item->id}">
+                    {include "../components/TgNewsItem.latte", item => $item}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div n:if="!$isTelegramNewsFeed" class='scroll_container'>
+        <div class='scroll_node' n:foreach='$feedPosts as $post' data-uniqueid="{$post->getPrettyId()}">
             <a name="postGarter={$post->getId()}"></a>
             {include "../components/post.latte", post => $post, onWallOf => true, commentSection => true, bigWall => true}
         </div>
@@ -33,7 +99,7 @@
         <div class="postFeedPaginator">
             {include "../components/paginator.latte", conf => $paginatorConf}
         </div>
-        <div class="postFeedPageSelect">
+        <div n:if="!$isTelegramNewsFeed" class="postFeedPageSelect">
             {_posts_per_page}:
             <br />
             <select id="pageSelect">
@@ -48,12 +114,35 @@
         </div>
     </div>
 
-    <script>
+    <script n:if="!$isTelegramNewsFeed">
         u("#pageSelect").nodes[0].value = {$paginatorConf->perPage};
         
         u("#pageSelect").on("change", function(e) {
             let url = "?" + {http_build_query(array_merge($_GET, ['posts' => '__padding']))};
             window.location.assign(url.replace("__padding", e.target.value));
+        });
+    </script>
+    <script n:if="$isTelegramNewsFeed">
+        u("#__telegram_news_manage_link").on("click", function(e) {
+            e.preventDefault();
+
+            let sidebar = u("#telegram_news_sidebar").nodes[0];
+            sidebar.style.display = sidebar.style.display === "none" ? "block" : "none";
+        });
+
+        u(document).on("click", function(e) {
+            let sidebar = u("#telegram_news_sidebar").nodes[0];
+            let trigger = u("#__telegram_news_manage_link").nodes[0];
+
+            if(!sidebar || sidebar.style.display === "none") {
+                return;
+            }
+
+            if(sidebar.contains(e.target) || trigger.contains(e.target)) {
+                return;
+            }
+
+            sidebar.style.display = "none";
         });
     </script>
 {/block}

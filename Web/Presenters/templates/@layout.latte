@@ -185,16 +185,16 @@
                             <a n:if="$thisUser->getLeftMenuItemStatus('videos')" href="/videos{$thisUser->getId()}" class="link">{_my_videos}</a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('audios')" href="/audios{$thisUser->getId()}" class="link">{_my_audios}</a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('messages')" href="/im" class="link">{_my_messages}
-                                <object type="internal/link" n:if="$thisUser->getUnreadMessagesCount() > 0">
-                                    (<b>{$thisUser->getUnreadMessagesCount()}</b>)
+                                <object type="internal/link" id="layout-unread-messages-wrapper" style="display: {$thisUser->getUnreadMessagesCount() > 0 ? 'inline' : 'none'};">
+                                    (<b id="layout-unread-messages">{$thisUser->getUnreadMessagesCount()}</b>)
                                 </object>
                             </a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('notes')" href="/notes{$thisUser->getId()}" class="link">{_my_notes}</a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('groups')" href="/groups{$thisUser->getId()}" class="link">{_my_groups}</a>
                             <a n:if="$thisUser->getLeftMenuItemStatus('news')" href="/feed" class="link" title="{_my_feed} [Alt+Shift+,]" accesskey=",">{_my_feed}</a>
                             <a href="/notifications" class="link" title="{_my_feedback} [Alt+Shift+N]" accesskey="n">{_my_feedback}
-                                <object type="internal/link" n:if="$thisUser->getNotificationsCount() > 0">
-                                    (<b>{$thisUser->getNotificationsCount()}</b>)
+                                <object type="internal/link" id="layout-unread-notifications-wrapper" style="display: {$thisUser->getNotificationsCount() > 0 ? 'inline' : 'none'};">
+                                    (<b id="layout-unread-notifications">{$thisUser->getNotificationsCount()}</b>)
                                 </object>
                             </a>
                             <a href="/settings" class="link">{_my_settings}</a>
@@ -302,9 +302,9 @@
                                     <img src="/assets/packages/static/openvk/img/photos.svg">
                                 </a>
                                 <a id="minilink-messenger" class="minilink" href="/im">
-                                    <object type="internal/link" n:if="$thisUser->getUnreadMessagesCount() > 0">
+                                    <object type="internal/link" id="layout-unread-messages-mini-wrapper" style="display: {$thisUser->getUnreadMessagesCount() > 0 ? 'inline' : 'none'};">
                                         <div class="counter">
-                                            +{$thisUser->getUnreadMessagesCount()}
+                                            +<span id="layout-unread-messages-mini">{$thisUser->getUnreadMessagesCount()}</span>
                                         </div>
                                     </object>
                                     <img src="/assets/packages/static/openvk/img/messages.svg">
@@ -313,9 +313,9 @@
                                     <img src="/assets/packages/static/openvk/img/groups.svg">
                                 </a>
                                 <a id="minilink-notifications" class="minilink" href="/notifications">
-                                    <object type="internal/link" n:if="$thisUser->getNotificationsCount() > 0">
+                                    <object type="internal/link" id="layout-unread-notifications-mini-wrapper" style="display: {$thisUser->getNotificationsCount() > 0 ? 'inline' : 'none'};">
                                         <div class="counter">
-                                            +{$thisUser->getNotificationsCount()}
+                                            +<span id="layout-unread-notifications-mini">{$thisUser->getNotificationsCount()}</span>
                                         </div>
                                     </object>
                                     <img src="/assets/packages/static/openvk/img/feedback.svg">
@@ -435,7 +435,7 @@
         {script "js/options.js"}
 
         {ifset $thisUser}
-            {script "js/al_notifs.js"}
+            {* Temporarily disable notification long-poll while investigating request stalls. *}
             {script "js/al_feed.js"}
         {/ifset}
 
@@ -445,6 +445,220 @@
         {css "js/node_modules/leaflet-control-geocoder/dist/Control.Geocoder.css"}
 
         <script>bsdnHydrate();</script>
+
+        {ifset $thisUser}
+            <script>
+                (function setupRealtimeCountersAndNotifications() {
+                    if(window.__ovkRealtimePolling) {
+                        return;
+                    }
+                    window.__ovkRealtimePolling = true;
+
+                    createjs.Sound.registerSound("/assets/packages/static/openvk/audio/notify.mp3", "notification");
+                    window.__actualPlayNotifSound = window.__actualPlayNotifSound || function() {
+                        createjs.Sound.play("notification");
+                    };
+                    window.playNotifSound = window.playNotifSound || Function.noop;
+
+                    const unlockNotifSound = () => {
+                        try {
+                            const probe = createjs.Sound.play("notification", { volume: 0.01 });
+                            if(probe && typeof probe.stop === "function") {
+                                window.setTimeout(() => probe.stop(), 50);
+                            }
+                        } catch (error) {
+                            console.warn("Notification sound warmup failed", error);
+                        }
+
+                        window.playNotifSound = window.__actualPlayNotifSound;
+                        document.body.removeEventListener("click", unlockNotifSound);
+                        document.body.removeEventListener("keydown", unlockNotifSound);
+                        document.body.removeEventListener("touchstart", unlockNotifSound);
+                    };
+
+                    document.body.addEventListener("click", unlockNotifSound, { once: true });
+                    document.body.addEventListener("keydown", unlockNotifSound, { once: true });
+                    document.body.addEventListener("touchstart", unlockNotifSound, { once: true });
+
+                    const shownNotificationIds = new Set();
+                    const shownMessageIds = new Set();
+                    let lastMessageCount = {$thisUser->getUnreadMessagesCount()};
+                    let lastNotificationCount = {$thisUser->getNotificationsCount()};
+
+                    const updateMessageCounters = count => {
+                        const fullCounter = document.getElementById("layout-unread-messages");
+                        const miniCounter = document.getElementById("layout-unread-messages-mini");
+                        const fullWrapper = document.getElementById("layout-unread-messages-wrapper");
+                        const miniWrapper = document.getElementById("layout-unread-messages-mini-wrapper");
+
+                        if(fullCounter) {
+                            fullCounter.textContent = count;
+                            if(fullWrapper) {
+                                fullWrapper.style.display = count > 0 ? "inline" : "none";
+                            }
+                        }
+
+                        if(miniCounter) {
+                            miniCounter.textContent = count;
+                            if(miniWrapper) {
+                                miniWrapper.style.display = count > 0 ? "inline" : "none";
+                            }
+                        }
+                    };
+
+                    const updateNotificationCounters = count => {
+                        const fullCounter = document.getElementById("layout-unread-notifications");
+                        const miniCounter = document.getElementById("layout-unread-notifications-mini");
+                        const fullWrapper = document.getElementById("layout-unread-notifications-wrapper");
+                        const miniWrapper = document.getElementById("layout-unread-notifications-mini-wrapper");
+
+                        if(fullCounter) {
+                            fullCounter.textContent = count;
+                            if(fullWrapper) {
+                                fullWrapper.style.display = count > 0 ? "inline" : "none";
+                            }
+                        }
+
+                        if(miniCounter) {
+                            miniCounter.textContent = count;
+                            if(miniWrapper) {
+                                miniWrapper.style.display = count > 0 ? "inline" : "none";
+                            }
+                        }
+                    };
+
+                    const fetchLatestNotifications = async () => {
+                        const resp = await fetch("/notifications/api/latest.json?_poll=" + Date.now(), {
+                            credentials: "same-origin",
+                            cache: "no-store"
+                        });
+                        if(!resp.ok) {
+                            throw new Error("Failed to fetch latest notifications: " + resp.status);
+                        }
+
+                        return await resp.json();
+                    };
+
+                    const fetchLatestCorrespondences = async () => {
+                        const resp = await fetch("/im/api/list/1.json?_poll=" + Date.now(), {
+                            credentials: "same-origin",
+                            cache: "no-store"
+                        });
+                        if(!resp.ok) {
+                            throw new Error("Failed to fetch latest correspondences: " + resp.status);
+                        }
+
+                        return await resp.json();
+                    };
+
+                    const bootstrapSeenNotifications = async () => {
+                        if(lastNotificationCount <= 0) {
+                            return;
+                        }
+
+                        try {
+                            const items = await fetchLatestNotifications();
+                            items.forEach(item => shownNotificationIds.add(item.id));
+                        } catch (error) {
+                            console.error("Failed to bootstrap notifications", error);
+                        }
+                    };
+
+                    const bootstrapSeenMessages = async () => {
+                        if(lastMessageCount <= 0) {
+                            return;
+                        }
+
+                        try {
+                            const items = await fetchLatestCorrespondences();
+                            items.forEach(item => {
+                                if(item.lastMessage && item.lastMessage.unread) {
+                                    shownMessageIds.add(String(item.lastMessage.uuid));
+                                }
+                            });
+                        } catch (error) {
+                            console.error("Failed to bootstrap messages", error);
+                        }
+                    };
+
+                    const showNewNotifications = async () => {
+                        try {
+                            const items = await fetchLatestNotifications();
+                            items.reverse().forEach(item => {
+                                if(shownNotificationIds.has(item.id)) {
+                                    return;
+                                }
+
+                                shownNotificationIds.add(item.id);
+                                window.playNotifSound();
+                                NewNotification(item.title, item.body, item.ava, Function.noop, item.priority * 6000);
+                            });
+                        } catch (error) {
+                            console.error("Failed to show notifications", error);
+                        }
+                    };
+
+                    const showNewMessages = async () => {
+                        try {
+                            const items = await fetchLatestCorrespondences();
+                            items.reverse().forEach(item => {
+                                if(!item.lastMessage || item.lastMessage.senderOwn || !item.lastMessage.unread) {
+                                    return;
+                                }
+
+                                const messageId = String(item.lastMessage.uuid);
+                                if(shownMessageIds.has(messageId)) {
+                                    return;
+                                }
+
+                                shownMessageIds.add(messageId);
+                                window.playNotifSound();
+                                NewNotification(
+                                    item.recipient.name,
+                                    item.lastMessage.text,
+                                    item.recipient.avatar,
+                                    () => window.location.assign(item.url),
+                                    6000
+                                );
+                            });
+                        } catch (error) {
+                            console.error("Failed to show message notifications", error);
+                        }
+                    };
+
+                    const pollState = async () => {
+                        try {
+                            const counters = await window.OVKAPI.call("account.getCounters", {});
+                            const messageCount = counters.messages ?? 0;
+                            const notificationCount = counters.notifications ?? 0;
+
+                            updateMessageCounters(messageCount);
+                            updateNotificationCounters(notificationCount);
+
+                            if(messageCount > lastMessageCount) {
+                                await showNewMessages();
+                            }
+                            if(notificationCount > lastNotificationCount) {
+                                await showNewNotifications();
+                            }
+
+                            lastMessageCount = messageCount;
+                            lastNotificationCount = notificationCount;
+                        } catch (error) {
+                            console.error("Failed to poll counters", error);
+                        }
+                    };
+
+                    Promise.all([
+                        bootstrapSeenNotifications(),
+                        bootstrapSeenMessages(),
+                    ]).finally(() => {
+                        pollState();
+                        window.setInterval(pollState, 5000);
+                    });
+                })();
+            </script>
+        {/ifset}
 
         <script n:if="\OPENVK_ROOT_CONF['openvk']['telemetry']['plausible']['enable']" async defer data-domain="{php echo \OPENVK_ROOT_CONF['openvk']['telemetry']['plausible']['domain']}" src="{php echo OPENVK_ROOT_CONF['openvk']['telemetry']['plausible']['server']}js/plausible.js"></script>
 

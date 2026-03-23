@@ -41,7 +41,7 @@
         <img class="gift_confirm_pic" style="max-width: 256px;" src="{$gift->getImage(2)}" alt="Подарок" />
     
         <form style="width: 65%;" method="POST">
-            <textarea name="comment" style="resize: vertical; height: 65px;" placeholder="{_gift_your_message}"></textarea>
+            <textarea name="comment" maxlength="200" style="resize: vertical; height: 65px;" placeholder="{_gift_your_message}"></textarea>
             <br/><br/>
             
             <input type="hidden" name="hash" value="{$csrfToken}" />

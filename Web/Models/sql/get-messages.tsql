@@ -4,6 +4,7 @@ FROM
   `messages`
 WHERE
   (`deleted` = 0)
+  AND (`conversation_id` IS NULL)
   AND (`id` > ?)
   AND (
     (

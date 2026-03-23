@@ -91,15 +91,23 @@ class Correspondence
     public function getMessages(int $capBehavior = 1, ?int $cap = null, ?int $limit = null, ?int $padding = null, bool $reverse = false): array
     {
         $query  = file_get_contents(__DIR__ . "/../sql/get-messages.tsql");
+        $source = $this->correspondents[0];
+        $target = $this->correspondents[1];
         $params = [
-            [get_class($this->correspondents[0]), get_class($this->correspondents[1])],
-            [$this->correspondents[0]->getId(), $this->correspondents[1]->getId()],
+            [get_class($source), get_class($target)],
+            [$source->getId(), $target->getId()],
             [$limit ?? OPENVK_DEFAULT_PER_PAGE],
         ];
         $params = array_merge($params[0], $params[1], array_reverse($params[0]), array_reverse($params[1]), $params[2]);
 
         if ($limit === null) {
-            DatabaseConnection::i()->getConnection()->query("UPDATE messages SET unread = 0 WHERE sender_id = " . $this->correspondents[1]->getId());
+            DatabaseConnection::i()->getConnection()->query(
+                "UPDATE messages SET unread = 0 WHERE sender_type = ? AND sender_id = ? AND recipient_type = ? AND recipient_id = ? AND conversation_id IS NULL AND unread = 1",
+                get_class($target),
+                $target->getId(),
+                get_class($source),
+                $source->getId()
+            );
         }
 
         if (is_null($cap)) {
@@ -173,7 +181,13 @@ class Correspondence
         $message->setUnread(1);
         $message->save();
 
-        DatabaseConnection::i()->getConnection()->query("UPDATE messages SET unread = 0 WHERE sender_id = " . $this->correspondents[1]->getId());
+        DatabaseConnection::i()->getConnection()->query(
+            "UPDATE messages SET unread = 0 WHERE sender_type = ? AND sender_id = ? AND recipient_type = ? AND recipient_id = ? AND conversation_id IS NULL AND unread = 1",
+            $classes[1],
+            $ids[1],
+            $classes[0],
+            $ids[0]
+        );
 
         # да
         if ($ids[0] !== $ids[1]) {

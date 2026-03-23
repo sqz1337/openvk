@@ -7,7 +7,8 @@ namespace openvk\Web\Presenters;
 use openvk\Web\Models\Exceptions\TooMuchOptionsException;
 use openvk\Web\Models\Entities\{Poll, Post, Photo, Video, Club, User};
 use openvk\Web\Models\Entities\Notifications\{MentionNotification, RepostNotification, WallPostNotification, PostAcceptedNotification, NewSuggestedPostsNotification};
-use openvk\Web\Models\Repositories\{Posts, Users, Clubs, Albums, Notes, Videos, Comments, Photos, Audios};
+use openvk\Web\Models\Repositories\{Posts, Users, Clubs, Albums, Notes, Videos, Comments, Photos, Audios, TelegramNews};
+use openvk\Web\Util\Validator;
 use Chandler\Database\DatabaseConnection;
 use Nette\InvalidStateException as ISE;
 use Bhaktaraz\RSSGenerator\Item;
@@ -201,6 +202,7 @@ final class WallPresenter extends OpenVKPresenter
                    ->where("deleted", 0)
                    ->where("suggested", 0)
                    ->order("created DESC");
+        $this->template->newsItems = [];
         $this->template->paginatorConf = (object) [
             "count"   => sizeof($posts),
             "page"    => (int) ($_GET["p"] ?? 1),
@@ -244,6 +246,7 @@ final class WallPresenter extends OpenVKPresenter
 
         $this->template->_template     = "Wall/Feed.latte";
         $this->template->globalFeed    = true;
+        $this->template->newsItems     = [];
         $this->template->paginatorConf = (object) [
             "count"   => $count,
             "page"    => (int) ($_GET["p"] ?? 1),
@@ -255,6 +258,86 @@ final class WallPresenter extends OpenVKPresenter
         foreach ($posts as $post) {
             $this->template->posts[] = $this->posts->get($post->id);
         }
+    }
+
+    public function renderTelegramNewsFeed(): void
+    {
+        $this->assertUserLoggedIn();
+
+        $newsRepo = new TelegramNews();
+        $sources  = $newsRepo->getSources();
+
+        $this->template->canManageTelegramNews = $this->hasPermission("admin", "access", -1);
+        $this->template->telegramNewsSources   = $sources;
+
+        if ($_SERVER["REQUEST_METHOD"] === "POST" && $this->template->canManageTelegramNews) {
+            $this->assertNoCSRF();
+            $this->willExecuteWriteAction();
+
+            if ($this->postParam("action") === "refresh_news") {
+                $result = $newsRepo->refresh();
+                $this->flash("succ", tr("changes_saved"), tr("telegram_news_refreshed", $result["inserted"], $result["deleted"]));
+                $this->redirect("/feed/global-news");
+            }
+
+            $title       = trim((string) $this->postParam("title"));
+            $handleInput = trim((string) $this->postParam("telegram_handle"));
+
+            if ($title === "" || $handleInput === "") {
+                $this->flashFail("err", tr("error"), "Заполни название и Telegram-канал.");
+            }
+
+            if (!Validator::i()->telegramValid($handleInput)) {
+                $this->flashFail("err", tr("invalid_telegram_name"), tr("invalid_telegram_name_comment"));
+            }
+
+            $handle = $handleInput;
+            if (strpos($handle, "t.me/") === 0) {
+                $handle = substr($handle, 5);
+            }
+
+            $handle = ltrim($handle, "@");
+
+            $existing = DatabaseConnection::i()->getContext()->table("tg_news_sources")->where("telegram_handle", $handle)->fetch();
+            if ($existing) {
+                $this->flashFail("err", tr("error"), tr("telegram_news_source_exists"));
+            }
+
+            $newsRepo->addSource($title, $handle);
+            $this->flash("succ", tr("changes_saved"), tr("telegram_news_source_added"));
+            $this->redirect("/feed/global-news");
+        }
+
+        $filterWasApplied  = ((int) ($_GET["filter_applied"] ?? 0)) === 1;
+        $enabledSourceIds  = array_values(array_map(static fn($source): int => (int) $source->id, array_filter($sources, static fn($source): bool => (int) $source->is_enabled === 1)));
+        $selectedSourceIds = $enabledSourceIds;
+
+        if ($filterWasApplied) {
+            $selectedSourceIds = array_values(array_filter(array_map(
+                "intval",
+                is_array($_GET["sources"] ?? null) ? $_GET["sources"] : []
+            ), static fn(int $id): bool => $id > 0));
+        }
+
+        $page      = (int) ($_GET["p"] ?? 1);
+        $perPage   = min((int) ($_GET["posts"] ?? OPENVK_DEFAULT_PER_PAGE), 50);
+        $feedItems = $newsRepo->getFeedPage($page, $perPage, $selectedSourceIds);
+        $count     = $newsRepo->getFeedCount($selectedSourceIds);
+
+        $this->template->_template        = "Wall/Feed.latte";
+        $this->template->telegramNewsFeed = true;
+        $this->template->posts            = [];
+        $this->template->newsItems        = $feedItems;
+        $this->template->selectedSourceIds = $selectedSourceIds;
+        $this->template->telegramNewsFilterApplied = $filterWasApplied;
+        $this->template->paginatorConf    = (object) [
+            "count"   => $count,
+            "page"    => $page,
+            "amount"  => sizeof($feedItems),
+            "perPage" => $perPage,
+            "tidy"    => false,
+            "atTop"   => false,
+        ];
     }
 
     public function renderHashtagFeed($hashtag): void

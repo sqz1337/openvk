@@ -126,12 +126,58 @@ CREATE TABLE `messages` (
   `sender_id` bigint(20) UNSIGNED NOT NULL,
   `recipient_type` varchar(64) COLLATE utf8mb4_unicode_520_ci NOT NULL,
   `recipient_id` bigint(20) UNSIGNED NOT NULL,
+  `conversation_id` bigint(20) UNSIGNED DEFAULT NULL,
   `content` longtext COLLATE utf8mb4_unicode_520_ci NOT NULL,
   `created` bigint(20) NOT NULL,
   `edited` bigint(20) DEFAULT NULL,
   `ad` tinyint(1) NOT NULL DEFAULT 0,
   `deleted` tinyint(1) NOT NULL DEFAULT 0,
   `unread` tinyint(1) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+
+CREATE TABLE `conversations` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `creator` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(128) COLLATE utf8mb4_unicode_520_ci DEFAULT NULL,
+  `avatar_file` varchar(255) COLLATE utf8mb4_unicode_520_ci DEFAULT NULL,
+  `created` bigint(20) UNSIGNED NOT NULL,
+  `updated` bigint(20) UNSIGNED NOT NULL,
+  `last_message_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `deleted` tinyint(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+
+CREATE TABLE `conversation_participants` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `conversation_id` bigint(20) UNSIGNED NOT NULL,
+  `participant_type` varchar(64) COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  `participant_id` bigint(20) UNSIGNED NOT NULL,
+  `joined` bigint(20) UNSIGNED NOT NULL,
+  `last_read_message_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `is_admin` tinyint(1) NOT NULL DEFAULT 0,
+  `left_at` bigint(20) UNSIGNED DEFAULT NULL,
+  `deleted` tinyint(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+
+CREATE TABLE `tg_news_sources` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `title` varchar(191) COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  `telegram_handle` varchar(64) COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  `avatar_url` varchar(1024) COLLATE utf8mb4_unicode_520_ci DEFAULT NULL,
+  `is_enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `last_fetched_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+
+CREATE TABLE `tg_news_items` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `source_id` bigint(20) UNSIGNED NOT NULL,
+  `external_id` bigint(20) UNSIGNED NOT NULL,
+  `text` mediumtext COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  `image_url` varchar(2048) COLLATE utf8mb4_unicode_520_ci DEFAULT NULL,
+  `original_url` varchar(1024) COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  `published_at` timestamp NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
 
 CREATE TABLE `msg_descriptors` (
@@ -357,6 +403,24 @@ ALTER TABLE `likes`
 ALTER TABLE `messages`
   ADD PRIMARY KEY (`id`);
 
+ALTER TABLE `conversations`
+  ADD PRIMARY KEY (`id`);
+
+ALTER TABLE `conversation_participants`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `conversation_member` (`conversation_id`,`participant_type`,`participant_id`,`deleted`),
+  ADD KEY `participant_lookup` (`participant_type`,`participant_id`,`deleted`);
+
+ALTER TABLE `tg_news_sources`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `tg_news_sources_handle` (`telegram_handle`);
+
+ALTER TABLE `tg_news_items`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `tg_news_unique` (`source_id`,`external_id`),
+  ADD KEY `tg_news_published_at` (`published_at`),
+  ADD KEY `tg_news_source_id` (`source_id`);
+
 ALTER TABLE `msg_descriptors`
   ADD UNIQUE KEY `index` (`index`);
 
@@ -446,6 +510,18 @@ ALTER TABLE `likes`
 ALTER TABLE `messages`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
 
+ALTER TABLE `conversations`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `conversation_participants`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `tg_news_sources`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `tg_news_items`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
 ALTER TABLE `msg_descriptors`
   MODIFY `index` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
@@ -505,6 +581,9 @@ INSERT INTO `ChandlerACLRelations` VALUES ("ffffffff-ffff-ffff-ffff-ffffffffffff
 INSERT INTO `ChandlerGroups` VALUES (NULL, "OVK\\SpamAnalysts", NULL);
 INSERT INTO `ChandlerACLGroupsPermissions` VALUES ((SELECT id FROM ChandlerGroups WHERE name = "OVK\\SpamAnalysts"), "openvk\\Web\\Models\\Entities\\Ban", 0, "write", 1);
 INSERT INTO `ChandlerACLRelations` VALUES ("ffffffff-ffff-ffff-ffff-ffffffffffff", (SELECT id FROM ChandlerGroups WHERE name = "OVK\\SpamAnalysts"), 64);
+
+INSERT INTO `tg_news_sources` (`id`, `title`, `telegram_handle`, `avatar_url`, `is_enabled`, `last_fetched_at`, `created_at`, `updated_at`)
+VALUES (NULL, 'Медуза — LIVE', 'meduzalive', NULL, 1, NULL, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP());
 
 INSERT INTO `profiles` (`id`, `user`, `first_name`, `last_name`, `pseudo`, `info`, `about`, `status`, `privacy`, `left_menu`, `sex`, `type`, `phone`, `email`, `coins`, `since`, `block_reason`, `verified`, `reputation`, `shortcode`, `registering_ip`, `online`, `birthday`, `hometown`, `polit_views`, `marital_status`, `email_contact`, `telegram`, `interests`, `fav_music`, `fav_films`, `fav_shows`, `fav_books`, `fav_quote`, `city`, `address`, `style`, `style_avatar`, `show_rating`, `milkshake`, `nsfw_tolerance`, `notification_offset`, `deleted`, `microblog`) VALUES ('1', 'ffffffff-ffff-ffff-ffff-ffffffffffff', 'System', 'Administrator', NULL, NULL, NULL, 'Default System Administrator account', '1099511627775', '1099511627775', '0', '0', NULL, 'admin@localhost.localdomain6', '100', '2018-10-31 15:15:15', NULL, '1', '1000', 'sysop', '::1', '0', '0', NULL, '0', '0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Arcadia Bay', NULL, 'ovk', '0', '1', '0', '0', '0', '0', '0');
 

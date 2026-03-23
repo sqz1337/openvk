@@ -1,0 +1,76 @@
+{extends "../@layout.latte"}
+{block title}Настройки беседы{/block}
+
+{block header}
+<a href="/im">{_my_messages}</a> »
+<a href="{$conversation->getURL()}">{$conversation->getTitle()}</a> »
+Настройки беседы
+{/block}
+
+{block content}
+    <div class="container_gray" style="padding: 16px;">
+        <form method="POST" action="{$conversation->getSettingsURL()}/save" enctype="multipart/form-data">
+            <input type="hidden" name="hash" value="{$csrfToken}" />
+
+            <div style="margin-bottom: 16px;">
+                <div style="margin-bottom: 8px;"><strong>Текущая аватарка</strong></div>
+                <img src="{$conversation->getAvatarURL('normal', $thisUser)}" alt="Аватар беседы" style="width: 120px; height: 120px; object-fit: cover; border-radius: 8px;" />
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <label for="conversation-title"><strong>Название беседы</strong></label><br/>
+                <input id="conversation-title" type="text" name="title" maxlength="128" value="{$conversation->getTitle()}" style="width: 100%;" />
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <label for="conversation-avatar"><strong>Новая аватарка</strong></label><br/>
+                <input id="conversation-avatar" type="file" name="avatar" accept="image/jpeg,image/png,image/gif,image/webp" />
+            </div>
+
+            <button class="button" type="submit">Сохранить</button>
+        </form>
+    </div>
+
+    <div class="container_gray" style="padding: 16px; margin-top: 12px;">
+        <div style="margin-bottom: 12px;">
+            <strong>Участники беседы</strong>
+            <span style="color: #666;">({$conversation->getParticipantCount()})</span>
+        </div>
+
+        <div n:foreach="$conversation->getParticipants() as $participant" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid #ddd;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <img src="{$participant->getAvatarURL('miniscule')}" alt="{$participant->getCanonicalName()}" style="width: 40px; height: 40px;" />
+                <div>
+                    <a href="{$participant->getURL()}"><strong>{$participant->getCanonicalName()}</strong></a><br/>
+                    <span style="color: #666;">
+                        {if $conversation->getCreator() && $participant->getId() === $conversation->getCreator()->getId()}
+                            Создатель беседы
+                        {else}
+                            Участник
+                        {/if}
+                    </span>
+                </div>
+            </div>
+
+            <div n:if="$conversation->getCreator() && $participant->getId() !== $conversation->getCreator()->getId()">
+                <a class="button" href="{$conversation->getSettingsURL()}/remove-participant/{$participant->getId()}?hash={rawurlencode($csrfToken)}">Удалить</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container_gray" style="padding: 16px; margin-top: 12px;">
+        <form method="POST" action="{$conversation->getSettingsURL()}/add-participants">
+            <input type="hidden" name="hash" value="{$csrfToken}" />
+
+            <div style="margin-bottom: 12px;">
+                <label for="conversation-participants"><strong>Добавить участников по ID</strong></label><br/>
+                <textarea id="conversation-participants" name="participants" rows="3" style="width: 100%;" placeholder="Например: 2, 5, 18" required></textarea>
+                <div class="ovk-hint" style="margin-top: 6px; color: #777;">
+                    Пока что поддерживаются только пользователи. Укажи числовые ID через запятую или пробел.
+                </div>
+            </div>
+
+            <button class="button" type="submit">Добавить участников</button>
+        </form>
+    </div>
+{/block}

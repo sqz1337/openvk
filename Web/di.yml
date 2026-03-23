@@ -39,6 +39,7 @@ services:
     - openvk\Web\Models\Repositories\Notes
     - openvk\Web\Models\Repositories\Tickets
     - openvk\Web\Models\Repositories\Messages
+    - openvk\Web\Models\Repositories\Conversations
     - openvk\Web\Models\Repositories\Restores
     - openvk\Web\Models\Repositories\Reports
     - openvk\Web\Models\Repositories\Verifications

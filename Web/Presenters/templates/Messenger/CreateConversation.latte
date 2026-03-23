@@ -1,0 +1,29 @@
+{extends "../@layout.latte"}
+{block title}Новая беседа{/block}
+
+{block header}
+<a href="/im">{_my_messages}</a> » Новая беседа
+{/block}
+
+{block content}
+    <div class="container_gray" style="padding: 16px;">
+        <form method="POST" action="/im/create-conversation/commit">
+            <input type="hidden" name="hash" value="{$csrfToken}" />
+
+            <div style="margin-bottom: 12px;">
+                <label for="conversation-title"><strong>Название беседы</strong></label><br/>
+                <input id="conversation-title" type="text" name="title" maxlength="128" style="width: 100%;" placeholder="Например: Рабочий чат" />
+            </div>
+
+            <div style="margin-bottom: 12px;">
+                <label for="conversation-participants"><strong>ID участников</strong></label><br/>
+                <textarea id="conversation-participants" name="participants" rows="4" style="width: 100%;" placeholder="Например: 2, 5, 18" required></textarea>
+                <div class="ovk-hint" style="margin-top: 6px; color: #777;">
+                    Пока что поддерживаются только пользователи. Укажи числовые ID через запятую или пробел.
+                </div>
+            </div>
+
+            <button class="button" type="submit">Создать беседу</button>
+        </form>
+    </div>
+{/block}

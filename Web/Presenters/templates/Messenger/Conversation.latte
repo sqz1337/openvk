@@ -1,18 +1,16 @@
 {extends "../@layout.latte"}
-{block title}{$correspondent->getCanonicalName()}{/block}
+{block title}{$conversation->getTitle()}{/block}
 
 {block header}
-    
 <a href="/im">{_my_messages}</a> »
-<a href="{$correspondent->getURL()}">{$correspondent->getCanonicalName()}</a>    
-    <div n:if="($online = $correspondent->getOnline()->timestamp()) + 2505600 > time()" style="float: right;">
-        {var $diff = date_diff(date_create(), date_create('@' . $online))}
-        {if 5 >= $diff->i}
-            <span><b>{_online}</b></span>
-        {else}
-            <span>{$correspondent->isFemale() ? tr("was_online_f") : tr("was_online_m")} {$correspondent->getOnline()}</span>
-        {/if}
-    </div>
+{$conversation->getTitle()}
+<div style="float: right; max-width: 50%; text-align: right;">
+    {if $conversation->canBeModifiedBy($thisUser)}
+        <a href="{$conversation->getSettingsURL()}" style="font-weight: bold;">Настройки беседы</a>
+    {else}
+        {$conversation->getPreviewSubtitle($thisUser)}
+    {/if}
+</div>
 {/block}
 
 {block wrap}
@@ -26,15 +24,6 @@
                             <strong data-bind="text: sender.name"></strong>
                         </a>
                         <span class="text" data-bind="html: text"></span>
-                        <div data-bind="foreach: attachments" class="attachments">
-                            <div class="msg-attach-j">
-                                <div data-bind="if: type === 'photo'" class="msg-attach-j-photo">
-                                    <a data-bind="attr: { href: link }">
-                                        <img data-bind="attr: { src: photo.url, alt: photo.caption  }" />
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                     <div class="time" align="right">
                         <span data-bind="html: timing.sent"></span>
@@ -43,40 +32,36 @@
             </div>
         </div>
         <div class="messenger-app--input">
-            {if $correspondent->getId() === $thisUser->getId() || $correspondent->getPrivacyPermission('messages.write', $thisUser)}
-                <img class="ava" src="{$thisUser->getAvatarUrl('miniscule')}" alt="{$thisUser->getCanonicalName()}" />
-                <div class="messenger-app--input---messagebox">
-                    <textarea
-                            data-bind="value: messageContent, event: { keydown: onTextareaKeyPress }"
-                            name="message"
-                            placeholder="{_enter_message}"></textarea>
-                    <button class="button" data-bind="click: sendMessage">{_send}</button>
-                </div>
-                <img class="ava" src="{$correspondent->getAvatarUrl('miniscule')}" alt="{$correspondent->getCanonicalName()}" />
-            {else}
-                <div class="blocked" data-localized-text="{_messages_blocked}"></div>
-            {/if}
+            <img class="ava" src="{$thisUser->getAvatarUrl('miniscule')}" alt="{$thisUser->getCanonicalName()}" />
+            <div class="messenger-app--input---messagebox">
+                <textarea
+                        data-bind="value: messageContent, event: { keydown: onTextareaKeyPress }"
+                        name="message"
+                        placeholder="{_enter_message}"></textarea>
+                <button class="button" data-bind="click: sendMessage">{_send}</button>
+            </div>
+            <img class="ava" src="{$conversation->getAvatarURL('miniscule', $thisUser)}" alt="{$conversation->getTitle()}" />
         </div>
     </div>
-    
+
     {script "js/node_modules/knockout/build/output/knockout-latest.js"}
     <script>
-        function MessengerViewModel(initialMessages = []) {
+        function ConversationViewModel(initialMessages = []) {
             window.messages     = ko.observableArray(initialMessages);
             this.messages       = window.messages;
             this.messageContent = ko.observable("");
-            
+
             this.sendMessage = model => {
                 if(model.messageContent() === "") return false;
-                
-                window.Msg.sendMessage(model.messageContent());
+
+                window.Conv.sendMessage(model.messageContent());
                 model.messageContent("");
             };
             this.loadHistory = _ => {
-                window.Msg._loadHistory();
+                window.Conv._loadHistory();
             };
-            
-            this.onMessagesScroll   = (model, e) => {
+
+            this.onMessagesScroll = (model, e) => {
                 if(e.target.scrollTop < 21)
                     model.loadHistory();
             };
@@ -84,21 +69,21 @@
                 if(e.which === 13) {
                     if(!e.metaKey && !e.shiftKey) {
                         let ta = u("textarea[name=message]").nodes[0];
-                        ta.blur(); //Fix update
+                        ta.blur();
                         model.sendMessage(model);
                         ta.focus();
-                        
+
                         return false;
                     }
                 }
-                
+
                 return true;
             };
         }
-        
-        class Messenger {
+
+        class ConversationMessenger {
             constructor(messages = []) {
-                this.ko     = ko.applyBindings(new MessengerViewModel(messages));
+                this.ko     = ko.applyBindings(new ConversationViewModel(messages));
                 this.appEl  = document.querySelector(".messenger-app--messages");
                 this.offset = 0;
                 this.latest = 0;
@@ -108,15 +93,15 @@
                 this._loadHistory(true);
                 this._setupPolling();
             }
-            
+
             async _fetchMessages(offset = 0) {
-                let url = "/im/api/messages" + {$correspondent->getId()} + "/" + offset + ".json?_poll=" + Date.now();
+                let url = "/im/api/conversations" + {$conversation->getId()} + "/" + offset + ".json?_poll=" + Date.now();
                 let resp = await fetch(url, {
                     credentials: "same-origin",
                     cache: "no-store"
                 });
                 if(!resp.ok) {
-                    throw new Error("Failed to fetch messages: " + resp.status);
+                    throw new Error("Failed to fetch conversation messages: " + resp.status);
                 }
 
                 return await resp.json();
@@ -194,12 +179,12 @@
                         this.appEl.scrollTop = this.appEl.scrollHeight;
                     }
                 } catch (error) {
-                    console.error("Failed to load message history", error);
+                    console.error("Failed to load conversation history", error);
                 } finally {
                     this.loadingHistory = false;
                 }
             }
-            
+
             _setupPolling() {
                 window.setInterval(() => this._pollLatest(), 3000);
             }
@@ -229,28 +214,28 @@
                         this.appEl.scrollTop = this.appEl.scrollHeight;
                     }
                 } catch (error) {
-                    console.error("Failed to poll new messages", error);
+                    console.error("Failed to poll new conversation messages", error);
                 } finally {
                     this.polling = false;
                 }
             }
-            
+
             appendMessages(messages) {
                 messages.forEach(m => window.messages.push(m));
             }
-            
+
             prependMessages(messages) {
                 messages.forEach(m => window.messages.unshift(m));
             }
-            
+
             addMessage(message, scroll = true) {
                 this.appendMessages([message]);
-                
+
                 if(scroll) {
                     this.appEl.scrollTop = this.appEl.scrollHeight;
                 }
             }
-            
+
             _patchMessage(tempId, message) {
                 for(let i = window.messages().length - 1; i > -1; i--) {
                     let msg = window.messages()[i];
@@ -258,13 +243,13 @@
                         return;
                     else if(msg._tuid !== tempId)
                         return;
-                    
+
                     window.messages.valueWillMutate();
                     window.messages()[i] = message;
                     window.messages.valueHasMutated();
                 }
             }
-            
+
             _newSelfMessage(content = "...") {
                 return {
                     "sender": {
@@ -282,59 +267,28 @@
                     "_tuid": Math.ceil(performance.now())
                 };
             }
-            
-            _newReplyMessage(content = "...") {
-                return {
-                    "sender": {
-                        "link": {$correspondent->getURL()},
-                        "avatar": {$correspondent->getAvatarUrl()},
-                        "name": {$correspondent->getFirstName()}
-                    },
-                    "timing": {
-                        "sent": window.API.Service.getTime(),
-                        "edited": null
-                    },
-                    "text": content,
-                    "read": true,
-                    "_tuid": Math.ceil(performance.now())
-                };
-            }
-            
+
             newMessage(content) {
                 let msg = this._newSelfMessage(content);
                 msg.timing.sent = "<img src=\"/assets/packages/static/openvk/img/loading_mini.gif\">";
                 this.addMessage(msg);
-                
+
                 return msg._tuid;
             }
-            
-            newReply(content) {
-                let msg = this._newReplyMessage(content);
-                this.addMessage(msg);
-                
-                return msg._tuid;
-            }
-            
-            newReplies(replies) {
-                replies.forEach(this.newReply);
-            }
-            
+
             sendMessage(content) {
-                console.debug("New outcoming message. Pushing preview to local stack.");
                 let tempId = this.newMessage(escapeHtml(content));
-                
                 let msgData = new FormData();
                 msgData.set("content", content);
                 msgData.set("hash", {$csrfToken});
-                
+
                 let that = this;
-                let xhr  = new XMLHttpRequest();
-                xhr.open("POST", "/im/api/messages" + {$correspondent->getId()} + "/create.json", true);
+                let xhr = new XMLHttpRequest();
+                xhr.open("POST", "/im/api/conversations" + {$conversation->getId()} + "/create.json", true);
                 xhr.onreadystatechange = (function() {
                     if(this.readyState !== 4)
                         return;
                     else if(this.status !== 202) {
-                        console.error("Message was not sent.");
                         that._patchMessage(tempId, {
                             sender: {
                                 avatar: "/assets/packages/static/openvk/img/oof.apng",
@@ -349,18 +303,16 @@
                             },
                             uuid: -4096
                         });
-                        
+
                         return;
                     }
-                    
-                    console.debug("Message sent, updating view.");
+
                     that._patchMessage(tempId, JSON.parse(xhr.responseText));
                 });
                 xhr.send(msgData);
-                console.debug("Message sent, awaiting response.");
             }
         }
-        
-        window.Msg = new Messenger([]);
+
+        window.Conv = new ConversationMessenger([]);
     </script>
 {/block}

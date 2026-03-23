@@ -8,6 +8,9 @@
         <div id="activetabs" class="tab">
             <a id="act_tab_a" href="javascript:false">{_all_messages}</a>
         </div>
+        <div class="tab" style="float: right;">
+            <a href="/im/create-conversation">Новая беседа</a>
+        </div>
     </div>
 
     <div class="container_gray">
@@ -16,8 +19,37 @@
         </form>
     </div>
 
-    {if sizeof($corresps) > 0}
-        <div class="crp-list scroll_container">
+    {if sizeof($conversations) > 0 || sizeof($corresps) > 0}
+        <div class="crp-list scroll_container" id="messenger-index-list">
+            <div n:foreach="$conversations as $conversation"
+                 class="scroll_node crp-entry"
+                 onmousedown="window.location.assign({$conversation->getURL()});" >
+                {var $lastMsg = $conversation->getLastMessage()}
+                {var $author = $lastMsg ? $lastMsg->getSender() : null}
+
+                <div class="crp-entry--image">
+                    <img src="{$conversation->getAvatarURL('miniscule', $thisUser)}"
+                    alt="Аватар беседы" loading=lazy />
+                </div>
+                <div class="crp-entry--info">
+                    <a href="{$conversation->getURL()}">{$conversation->getTitle()}</a><br/>
+                    <span>{if $lastMsg}{$lastMsg->getSendTimeHumanized()}{else}{$conversation->getCreatedTime()}{/if}</span>
+                </div>
+                <div n:class="crp-entry--message, $conversation->getUnreadStateFor($thisUser) ? unread">
+                    <div class="crp-entry--message---av" n:if="$author && $author->getId() === $thisUser->getId()">
+                        <img src="{$author->getAvatarURL('miniscule')}"
+                        alt="Фотография пользователя" />
+                    </div>
+                    <div class="crp-entry--message---text">
+                        {if $lastMsg}
+                            {$lastMsg->getText()|noescape}
+                        {else}
+                            Сообщений пока нет
+                        {/if}
+                    </div>
+                </div>
+            </div>
+
             <div n:foreach="$corresps as $coresp"
                  class="scroll_node crp-entry"
                  onmousedown="window.location.assign({$coresp->getURL()});" >
@@ -53,4 +85,41 @@
         <br/>
         <center>{_no_messages}</center>
     {/if}
+
+    <script>
+        (function setupMessengerIndexRefresh() {
+            const list = document.getElementById("messenger-index-list");
+
+            const refreshList = async () => {
+                if(!list) {
+                    return;
+                }
+
+                try {
+                    const separator = window.location.search.length > 0 ? "&" : "?";
+                    const resp = await fetch(window.location.pathname + window.location.search + separator + "_poll=" + Date.now(), {
+                        credentials: "same-origin",
+                        cache: "no-store"
+                    });
+                    if(!resp.ok) {
+                        throw new Error("Failed to fetch correspondences: " + resp.status);
+                    }
+
+                    const html = await resp.text();
+                    const doc = new DOMParser().parseFromString(html, "text/html");
+                    const nextList = doc.getElementById("messenger-index-list");
+                    if(!nextList) {
+                        return;
+                    }
+
+                    list.innerHTML = nextList.innerHTML;
+                } catch (error) {
+                    console.error("Failed to refresh messenger list", error);
+                }
+            };
+
+            refreshList();
+            window.setInterval(refreshList, 5000);
+        })();
+    </script>
 {/block}

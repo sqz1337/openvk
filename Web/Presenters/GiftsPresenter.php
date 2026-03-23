@@ -9,6 +9,9 @@ use openvk\Web\Models\Entities\Notifications\GiftNotification;
 
 final class GiftsPresenter extends OpenVKPresenter
 {
+    private const GIFT_COMMENT_MAX_LENGTH = 200;
+    private const GIFT_NOTIFICATION_DATA_MAX_LENGTH = 24;
+
     private $gifts;
     private $users;
     protected $presenterName = "gifts";
@@ -17,6 +20,19 @@ final class GiftsPresenter extends OpenVKPresenter
     {
         $this->gifts = $gifts;
         $this->users = $users;
+    }
+
+    private function trimGiftNotificationComment(?string $comment): ?string
+    {
+        if (is_null($comment) || $comment === "") {
+            return $comment;
+        }
+
+        if (iconv_strlen($comment) <= static::GIFT_NOTIFICATION_DATA_MAX_LENGTH) {
+            return $comment;
+        }
+
+        return rtrim(iconv_substr($comment, 0, static::GIFT_NOTIFICATION_DATA_MAX_LENGTH - 3)) . "...";
     }
 
     public function renderUserGifts(int $user): void
@@ -110,8 +126,12 @@ final class GiftsPresenter extends OpenVKPresenter
             $this->flashFail("err", tr("error"), tr("limit_exceed_exception"));
         }
 
-        $comment      = empty($c = $this->postParam("comment")) ? null : $c;
-        $notification = new GiftNotification($user, $this->user->identity, $gift, $comment);
+        $comment = empty($c = $this->postParam("comment")) ? null : trim($c);
+        if (!is_null($comment) && iconv_strlen($comment) > static::GIFT_COMMENT_MAX_LENGTH) {
+            $this->flashFail("err", tr("error_when_gifting"), "Сообщение к подарку не должно быть длиннее 200 символов.");
+        }
+
+        $notification = new GiftNotification($user, $this->user->identity, $gift, $this->trimGiftNotificationComment($comment));
         $notification->emit();
         $this->user->identity->setCoins($coinsLeft);
         $this->user->identity->save();

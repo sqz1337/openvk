@@ -734,7 +734,31 @@ class User extends RowModel
 
     public function getUnreadMessagesCount(): int
     {
-        return sizeof(DatabaseConnection::i()->getContext()->table("messages")->where(["recipient_id" => $this->getId(), "unread" => 1]));
+        $direct = DatabaseConnection::i()->getContext()->table("messages")
+            ->where([
+                "recipient_type" => self::class,
+                "recipient_id"   => $this->getId(),
+                "unread"         => 1,
+            ])
+            ->where("conversation_id IS NULL")
+            ->count("*");
+
+        $conversations = (int) DatabaseConnection::i()->getConnection()->query(
+            "SELECT COUNT(*) AS cnt
+             FROM conversation_participants cp
+             INNER JOIN conversations c ON c.id = cp.conversation_id
+             WHERE cp.participant_type = ?
+               AND cp.participant_id = ?
+               AND cp.deleted = 0
+               AND cp.left_at IS NULL
+               AND c.deleted = 0
+               AND c.last_message_id IS NOT NULL
+               AND (cp.last_read_message_id IS NULL OR cp.last_read_message_id < c.last_message_id)",
+            self::class,
+            $this->getId()
+        )->fetch()->cnt;
+
+        return (int) $direct + $conversations;
     }
 
     public function getClubs(int $page = 1, bool $admin = false, int $count = OPENVK_DEFAULT_PER_PAGE, bool $offset = false): \Traversable
