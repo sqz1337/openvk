@@ -11,6 +11,8 @@ use RdKafka\{Conf, Producer};
 
 class Notification
 {
+    private const MAX_ADDITIONAL_DATA_LENGTH = 24;
+
     private $recipient;
     private $originModel;
     private $targetModel;
@@ -78,7 +80,7 @@ class Notification
 
     public function getData(): string
     {
-        return $this->data;
+        return $this->normalizeAdditionalData($this->data);
     }
 
     public function getDateTime(): DateTime
@@ -92,6 +94,8 @@ class Notification
             return false;
         }
 
+        $additionalData = $this->normalizeAdditionalData($this->data);
+
         $data = [
             "recipient"         => $this->recipient->getId(),
             "originModelType"   => $this->encodeType($this->originModel),
@@ -99,7 +103,7 @@ class Notification
             "targetModelType"   => $this->encodeType($this->targetModel),
             "targetModelId"     => $this->targetModel->getId(),
             "actionCode"        => $this->actionCode,
-            "additionalPayload" => $this->data,
+            "additionalPayload" => $additionalData,
             "timestamp"         => $this->time,
         ];
 
@@ -139,6 +143,16 @@ class Notification
         }
 
         return true;
+    }
+
+    private function normalizeAdditionalData(string $data): string
+    {
+        $data = trim($data);
+        if (mb_strlen($data) <= self::MAX_ADDITIONAL_DATA_LENGTH) {
+            return $data;
+        }
+
+        return rtrim(mb_substr($data, 0, self::MAX_ADDITIONAL_DATA_LENGTH - 3)) . "...";
     }
 
     public function getVkApiInfo()
