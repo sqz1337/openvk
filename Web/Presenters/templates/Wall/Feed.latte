@@ -25,6 +25,7 @@
             <a n:attr="id => ($isTelegramNewsFeed ? 'act_tab_a' : 'ki')" href="/feed/global-news">{_global_news}</a>
         </div>
 
+        <a n:if="$isTelegramNewsFeed" href="#" id="__telegram_news_manage_link" class="side_link">{_manage}</a>
         <a n:if="!$isTelegramNewsFeed" href='#' id="__feed_settings_link" class="side_link" data-pagescount='{ceil($paginatorConf->count / $paginatorConf->perPage)}'>{_feed_settings}</a>
     </div>
 
@@ -40,7 +41,7 @@
                 </div>
             </div>
         </div>
-        <aside style="width: 260px; flex: 0 0 260px;">
+        <aside id="telegram_news_sidebar" style="width: 260px; flex: 0 0 260px; display: none;">
             <div class="content_subtitle">
                 {_telegram_news_sources}
             </div>
@@ -107,6 +108,14 @@
         u("#pageSelect").on("change", function(e) {
             let url = "?" + {http_build_query(array_merge($_GET, ['posts' => '__padding']))};
             window.location.assign(url.replace("__padding", e.target.value));
+        });
+    </script>
+    <script n:if="$isTelegramNewsFeed">
+        u("#__telegram_news_manage_link").on("click", function(e) {
+            e.preventDefault();
+
+            let sidebar = u("#telegram_news_sidebar").nodes[0];
+            sidebar.style.display = sidebar.style.display === "none" ? "block" : "none";
         });
     </script>
 {/block}
