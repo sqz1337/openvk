@@ -223,6 +223,11 @@
 "my_news" = "Мои новости";
 "all_news" = "Все новости";
 "global_news" = "Глобальные новости";
+"telegram_news_sources" = "Каналы";
+"telegram_news_sources_empty" = "Пока нет источников.";
+"telegram_news_manage" = "Управление источниками";
+"telegram_news_source_added" = "Telegram-канал добавлен и будет подхвачен импортером.";
+"telegram_news_source_exists" = "Такой Telegram-канал уже добавлен.";
 "posts_per_page" = "Количество записей на странице";
 "show_ignored_sources" = "Показывать игнорируемые источники";
 "auto_scroll" = "Автоматическая прокрутка";

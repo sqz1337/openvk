@@ -10,6 +10,9 @@
     {var $isTelegramNewsFeed = isset($telegramNewsFeed)}
     {var $feedPosts = $posts ?? []}
     {var $feedNewsItems = $newsItems ?? []}
+    {var $selectedSources = $selectedSourceIds ?? []}
+    {var $sources = $telegramNewsSources ?? []}
+    {var $canManageTelegramNews = $canManageTelegramNews ?? false}
 
     <div class="tabs">
         <div n:attr="id => (!$isGlobalFeed && !$isTelegramNewsFeed ? 'activetabs' : 'ki')" class="tab">
@@ -29,21 +32,61 @@
         {include "../components/textArea.latte", route => "/wall" . $thisUser->getId() . "/makePost", graffiti => true, polls => true, notes => true, hasSource => true, geo => true}
     </div>
 
-    <div class='scroll_container'>
-        <div n:if="$isTelegramNewsFeed" class='scroll_node' n:foreach='$feedNewsItems as $item' data-uniqueid="tg-news-{$item->id}">
-            {include "../components/TgNewsItem.latte", item => $item}
+    <div n:if="$isTelegramNewsFeed" style="display: flex; align-items: flex-start; gap: 12px;">
+        <div style="flex: 1; min-width: 0;">
+            <div class='scroll_container'>
+                <div class='scroll_node' n:foreach='$feedNewsItems as $item' data-uniqueid="tg-news-{$item->id}">
+                    {include "../components/TgNewsItem.latte", item => $item}
+                </div>
+            </div>
         </div>
-        <div n:if="!$isTelegramNewsFeed" class='scroll_node' n:foreach='$feedPosts as $post' data-uniqueid="{$post->getPrettyId()}">
+        <aside style="width: 260px; flex: 0 0 260px;">
+            <div class="content_subtitle">
+                {_telegram_news_sources}
+            </div>
+            <div class="page_content">
+                <form method="GET" action="/feed/global-news">
+                    <div n:if="sizeof($sources) === 0" style="color: gray;">{_telegram_news_sources_empty}</div>
+                    <label n:foreach="$sources as $source" style="display: block; margin-bottom: 8px; line-height: 1.25;">
+                        <input type="checkbox" name="sources[]" value="{$source->id}" n:attr="checked => in_array((int) $source->id, $selectedSources, true)" />
+                        {$source->title}
+                    </label>
+                    <input class="button" type="submit" value="{_apply}" />
+                    <a n:if="sizeof($selectedSources) > 0" class="button secondary" href="/feed/global-news" style="margin-left: 6px;">{_reset}</a>
+                </form>
+            </div>
+
+            <div n:if="$canManageTelegramNews" class="content_subtitle" style="margin-top: 12px;">
+                {_telegram_news_manage}
+            </div>
+            <div n:if="$canManageTelegramNews" class="page_content">
+                <form method="POST">
+                    <div style="margin-bottom: 8px;">
+                        <label for="tg_news_title"><b>{_name}</b></label>
+                        <input id="tg_news_title" class="text medium-field" type="text" name="title" maxlength="191" />
+                    </div>
+                    <div style="margin-bottom: 8px;">
+                        <label for="tg_news_handle"><b>Telegram</b></label>
+                        <input id="tg_news_handle" class="text medium-field" type="text" name="telegram_handle" placeholder="@channel or t.me/channel" maxlength="64" />
+                    </div>
+                    <input type="hidden" name="hash" value="{$csrfToken}" />
+                    <input class="button" type="submit" value="{_add}" />
+                </form>
+            </div>
+        </aside>
+    </div>
+    <div n:if="!$isTelegramNewsFeed" class='scroll_container'>
+        <div class='scroll_node' n:foreach='$feedPosts as $post' data-uniqueid="{$post->getPrettyId()}">
             <a name="postGarter={$post->getId()}"></a>
             {include "../components/post.latte", post => $post, onWallOf => true, commentSection => true, bigWall => true}
         </div>
     </div>
 
-    <div n:if="!$isTelegramNewsFeed" class="postFeedBottom">
+    <div class="postFeedBottom">
         <div class="postFeedPaginator">
             {include "../components/paginator.latte", conf => $paginatorConf}
         </div>
-        <div class="postFeedPageSelect">
+        <div n:if="!$isTelegramNewsFeed" class="postFeedPageSelect">
             {_posts_per_page}:
             <br />
             <select id="pageSelect">
