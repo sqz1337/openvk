@@ -265,8 +265,10 @@ final class WallPresenter extends OpenVKPresenter
         $this->assertUserLoggedIn();
 
         $newsRepo = new TelegramNews();
+        $sources  = $newsRepo->getSources();
+
         $this->template->canManageTelegramNews = $this->hasPermission("admin", "access", -1);
-        $this->template->telegramNewsSources   = $newsRepo->getSources();
+        $this->template->telegramNewsSources   = $sources;
 
         if ($_SERVER["REQUEST_METHOD"] === "POST" && $this->template->canManageTelegramNews) {
             $this->assertNoCSRF();
@@ -300,10 +302,16 @@ final class WallPresenter extends OpenVKPresenter
             $this->redirect("/feed/global-news");
         }
 
-        $selectedSourceIds = array_values(array_filter(array_map(
-            "intval",
-            is_array($_GET["sources"] ?? null) ? $_GET["sources"] : []
-        ), static fn(int $id): bool => $id > 0));
+        $filterWasApplied  = ((int) ($_GET["filter_applied"] ?? 0)) === 1;
+        $enabledSourceIds  = array_values(array_map(static fn($source): int => (int) $source->id, array_filter($sources, static fn($source): bool => (int) $source->is_enabled === 1)));
+        $selectedSourceIds = $enabledSourceIds;
+
+        if ($filterWasApplied) {
+            $selectedSourceIds = array_values(array_filter(array_map(
+                "intval",
+                is_array($_GET["sources"] ?? null) ? $_GET["sources"] : []
+            ), static fn(int $id): bool => $id > 0));
+        }
 
         $page      = (int) ($_GET["p"] ?? 1);
         $perPage   = min((int) ($_GET["posts"] ?? OPENVK_DEFAULT_PER_PAGE), 50);
@@ -315,6 +323,7 @@ final class WallPresenter extends OpenVKPresenter
         $this->template->posts            = [];
         $this->template->newsItems        = $feedItems;
         $this->template->selectedSourceIds = $selectedSourceIds;
+        $this->template->telegramNewsFilterApplied = $filterWasApplied;
         $this->template->paginatorConf    = (object) [
             "count"   => $count,
             "page"    => $page,
