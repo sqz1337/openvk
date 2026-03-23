@@ -274,7 +274,13 @@ final class WallPresenter extends OpenVKPresenter
             $this->assertNoCSRF();
             $this->willExecuteWriteAction();
 
-            $title = trim((string) $this->postParam("title"));
+            if ($this->postParam("action") === "refresh_news") {
+                $result = $newsRepo->refresh();
+                $this->flash("succ", tr("changes_saved"), tr("telegram_news_refreshed", $result["inserted"], $result["deleted"]));
+                $this->redirect("/feed/global-news");
+            }
+
+            $title       = trim((string) $this->postParam("title"));
             $handleInput = trim((string) $this->postParam("telegram_handle"));
 
             if ($title === "" || $handleInput === "") {

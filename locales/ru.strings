@@ -228,6 +228,8 @@
 "telegram_news_manage" = "Управление источниками";
 "telegram_news_source_added" = "Telegram-канал добавлен и будет подхвачен импортером.";
 "telegram_news_source_exists" = "Такой Telegram-канал уже добавлен.";
+"telegram_news_refresh_now" = "Обновить новости";
+"telegram_news_refreshed" = "Импорт завершён: добавлено $1, удалено старых $2.";
 "posts_per_page" = "Количество записей на странице";
 "show_ignored_sources" = "Показывать игнорируемые источники";
 "auto_scroll" = "Автоматическая прокрутка";

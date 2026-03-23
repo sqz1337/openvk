@@ -58,7 +58,14 @@
                 {_telegram_news_manage}
             </div>
             <div n:if="$canManageTelegramNews" style="padding-top: 10px;">
+                <form method="POST" style="margin-bottom: 12px;">
+                    <input type="hidden" name="hash" value="{$csrfToken}" />
+                    <input type="hidden" name="action" value="refresh_news" />
+                    <input class="button" type="submit" value="{_telegram_news_refresh_now}" />
+                </form>
+
                 <form method="POST">
+                    <input type="hidden" name="action" value="add_source" />
                     <div style="margin-bottom: 10px;">
                         <label for="tg_news_title" style="display: block; margin-bottom: 4px;"><b>{_name}</b></label>
                         <input id="tg_news_title" class="text" style="display: block; width: 100%; box-sizing: border-box;" type="text" name="title" maxlength="191" />

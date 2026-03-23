@@ -242,6 +242,8 @@
 "telegram_news_manage" = "Manage sources";
 "telegram_news_source_added" = "Telegram source added and will be picked up by the importer.";
 "telegram_news_source_exists" = "This Telegram source is already added.";
+"telegram_news_refresh_now" = "Refresh news";
+"telegram_news_refreshed" = "Import finished: added $1, removed old $2.";
 "posts_per_page" = "Number of posts per page";
 "show_ignored_sources" = "Show ignored sources";
 "auto_scroll" = "Autoscroll";
